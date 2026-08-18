@@ -1,7 +1,10 @@
 # Let's Encrypt による TLS 終端の設定。
 # 使うときはコピーして FQDN を書き換える:
-#   cp tls.tfvars.example tls.tfvars
-#   ./redeploy.sh -var-file=tls.tfvars
+#   cp tls.auto.tfvars.example tls.auto.tfvars
+#
+# .auto.tfvars は terraform が自動で読み込むため -var-file の指定は不要。
+# 明示指定にすると、素の terraform apply を打ったときに
+# TLS 設定が消える事故が起きるのでこの形にしている。
 #
 # 事前に DNS の A レコードを手動で登録しておくこと:
 #   <FQDN>  A  <terraform output -raw lb_vip の値>
