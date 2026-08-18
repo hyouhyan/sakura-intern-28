@@ -69,12 +69,22 @@ wait_for_db() {
   for _ in $(seq 1 60); do
     if docker compose -f "$COMPOSE_FILE" exec -T db \
         mysqladmin ping -u "$DB_USER" -p"$DB_PASS" --silent >/dev/null 2>&1; then
-      log "DB起動確認"
-      return 0
+      break
     fi
     sleep 2
   done
-  die "DBが起動しませんでした"
+
+  # mysqladmin pingが通ってもrootのパスワード認証がまだ有効になっていない
+  # 一瞬の窓がある（entrypointの初期化フェーズが完全には終わっていない）。
+  # 以降の処理は全てrootで接続するため、実際に使う認証情報で疎通確認する。
+  for _ in $(seq 1 30); do
+    if mysql_root -e "SELECT 1;" >/dev/null 2>&1; then
+      log "DB起動確認（root認証込み）"
+      return 0
+    fi
+    sleep 1
+  done
+  die "DBが起動しませんでした（root認証がタイムアウトしました）"
 }
 
 wait_for_api() {
