@@ -30,37 +30,30 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) searchPosts(w http.ResponseWriter, r *http.Request, q string, viewerID int64, page, perPage, offset int) {
 	pattern := "%" + q + "%"
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id FROM posts
-		WHERE content LIKE ?
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
-	`, pattern, perPage, offset)
+	postIDs, total, err := h.queryIDsWithTotal(r,
+		`SELECT id, COUNT(*) OVER() AS total FROM posts
+		 WHERE content LIKE ?
+		 ORDER BY created_at DESC
+		 LIMIT ? OFFSET ?`,
+		[]any{pattern, perPage, offset}, offset,
+		`SELECT COUNT(*) FROM posts WHERE content LIKE ?`, []any{pattern},
+	)
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "server error")
 		return
 	}
-	defer rows.Close()
 
-	postIDs := make([]int64, 0)
-	for rows.Next() {
-		var postID int64
-		rows.Scan(&postID)
-		postIDs = append(postIDs, postID)
+	postsByID, err := h.fetchPostsBatch(r, postIDs, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
-
 	posts := make([]any, 0, len(postIDs))
 	for _, postID := range postIDs {
-		p, err := h.fetchPost(r, postID, viewerID)
-		if err == nil {
+		if p, ok := postsByID[postID]; ok {
 			posts = append(posts, p)
 		}
 	}
-
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM posts WHERE content LIKE ?`, pattern,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"posts":    posts,
@@ -72,37 +65,30 @@ func (h *Handler) searchPosts(w http.ResponseWriter, r *http.Request, q string, 
 
 func (h *Handler) searchUsers(w http.ResponseWriter, r *http.Request, q string, page, perPage, offset int) {
 	pattern := "%" + q + "%"
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id FROM users
-		WHERE username LIKE ? OR display_name LIKE ?
-		ORDER BY id
-		LIMIT ? OFFSET ?
-	`, pattern, pattern, perPage, offset)
+	userIDs, total, err := h.queryIDsWithTotal(r,
+		`SELECT id, COUNT(*) OVER() AS total FROM users
+		 WHERE username LIKE ? OR display_name LIKE ?
+		 ORDER BY id
+		 LIMIT ? OFFSET ?`,
+		[]any{pattern, pattern, perPage, offset}, offset,
+		`SELECT COUNT(*) FROM users WHERE username LIKE ? OR display_name LIKE ?`, []any{pattern, pattern},
+	)
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "server error")
 		return
 	}
-	defer rows.Close()
 
-	userIDs := make([]int64, 0)
-	for rows.Next() {
-		var uid int64
-		rows.Scan(&uid)
-		userIDs = append(userIDs, uid)
+	usersByID, err := h.fetchUsersBatch(r, userIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
-
 	users := make([]any, 0, len(userIDs))
 	for _, uid := range userIDs {
-		u, err := h.fetchUser(r, uid)
-		if err == nil {
+		if u, ok := usersByID[uid]; ok {
 			users = append(users, u)
 		}
 	}
-
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM users WHERE username LIKE ? OR display_name LIKE ?`, pattern, pattern,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"users":    users,

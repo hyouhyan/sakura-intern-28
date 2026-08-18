@@ -14,6 +14,10 @@ import (
 // インスタンスを増やす場合、DBへの接続数の合計は
 // インスタンス数 × maxOpenConns になる。DB側の max_connections を
 // 超えないよう、スケールアウト時は DB_MAX_OPEN_CONNS で調整する。
+//
+// 既定の 20 は MariaDB のデフォルト max_connections (151) に対して
+// 十分小さく、かつワーカーノードのスペックでも無理のない値として選んでいる。
+// VM や DB のスペックを見直すタイミングで再調整する。
 const (
 	defaultMaxOpenConns = 20
 	defaultMaxIdleConns = 10

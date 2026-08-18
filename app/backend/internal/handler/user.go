@@ -94,15 +94,16 @@ func (h *Handler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, followerID)
 	}
 
-	var users []any
+	usersByID, err := h.fetchUsersBatch(r, ids)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	users := make([]any, 0, len(ids))
 	for _, id := range ids {
-		u, err := h.fetchUser(r, id)
-		if err == nil {
+		if u, ok := usersByID[id]; ok {
 			users = append(users, u)
 		}
-	}
-	if users == nil {
-		users = []any{}
 	}
 	h.respondJSON(w, http.StatusOK, map[string]any{"users": users, "total": len(users)})
 }
@@ -130,15 +131,16 @@ func (h *Handler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 		ids = append(ids, followeeID)
 	}
 
-	var users []any
+	usersByID, err := h.fetchUsersBatch(r, ids)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	users := make([]any, 0, len(ids))
 	for _, id := range ids {
-		u, err := h.fetchUser(r, id)
-		if err == nil {
+		if u, ok := usersByID[id]; ok {
 			users = append(users, u)
 		}
-	}
-	if users == nil {
-		users = []any{}
 	}
 	h.respondJSON(w, http.StatusOK, map[string]any{"users": users, "total": len(users)})
 }

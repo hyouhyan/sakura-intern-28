@@ -27,7 +27,7 @@ func (h *Handler) GetFootprints(w http.ResponseWriter, r *http.Request) {
 	page, perPage, offset := h.pagination(r)
 
 	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT visitor_id, COUNT(*) AS visit_count, MAX(created_at) AS last_visited
+		SELECT visitor_id, COUNT(*) AS visit_count, MAX(created_at) AS last_visited, COUNT(*) OVER() AS total
 		FROM footprints
 		WHERE user_id = ?
 		GROUP BY visitor_id
@@ -45,17 +45,37 @@ func (h *Handler) GetFootprints(w http.ResponseWriter, r *http.Request) {
 		visitCount int
 	}
 	var rawFps []fpRow
+	var total int
 	for rows.Next() {
 		var fp fpRow
 		var lastVisited any
-		rows.Scan(&fp.visitorID, &fp.visitCount, &lastVisited)
+		rows.Scan(&fp.visitorID, &fp.visitCount, &lastVisited, &total)
 		rawFps = append(rawFps, fp)
+	}
+	rows.Close()
+
+	// ウィンドウ関数は返ってきた行に対して総件数（グループ数）を付与するため、
+	// OFFSET がページ末尾を超えて0件になるケースだけフォールバックで数える。
+	if len(rawFps) == 0 && offset > 0 {
+		h.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(DISTINCT visitor_id) FROM footprints WHERE user_id = ?`, userID,
+		).Scan(&total)
+	}
+
+	visitorIDs := make([]int64, len(rawFps))
+	for i, rf := range rawFps {
+		visitorIDs[i] = rf.visitorID
+	}
+	visitorsByID, err := h.fetchUsersBatch(r, visitorIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
 
 	fps := make([]any, 0, len(rawFps))
 	for _, rf := range rawFps {
-		visitor, err := h.fetchUser(r, rf.visitorID)
-		if err != nil {
+		visitor, ok := visitorsByID[rf.visitorID]
+		if !ok {
 			continue
 		}
 		fps = append(fps, map[string]any{
@@ -63,11 +83,6 @@ func (h *Handler) GetFootprints(w http.ResponseWriter, r *http.Request) {
 			"visit_count": rf.visitCount,
 		})
 	}
-
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(DISTINCT visitor_id) FROM footprints WHERE user_id = ?`, userID,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"footprints": fps,

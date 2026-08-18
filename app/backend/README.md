@@ -237,8 +237,8 @@ docker compose up -d
 マイグレーションは手動で適用してください。
 
 ```bash
-docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/002_repost_unique.sql
-docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/003_notifications_index.sql
+docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/002_add_indexes.sql
+docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/003_repost_unique.sql
 ```
 
 ### 環境変数

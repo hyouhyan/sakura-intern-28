@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -187,7 +188,14 @@ func (h *Handler) fanoutThreadReplies(ctx context.Context, delivered map[int64]i
 		}
 
 		// 購読者ごとに閲覧者が違うため、閲覧者に依存する項目は付けずに配る。
-		post, err := h.fetchPostCtx(ctx, latestID, 0)
+		// fetchPost はリクエストを受け取るが、使うのは r.Context() と
+		// currentUserID(r) だけなので、context だけを載せた器を渡せば足りる。
+		// 利用者が載っていないため liked_by_me などは付かない。
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/", nil)
+		if err != nil {
+			continue
+		}
+		post, err := h.fetchPost(req, latestID, 0)
 		if err != nil {
 			continue
 		}
