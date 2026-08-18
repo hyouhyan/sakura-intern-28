@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -18,6 +19,8 @@ type Handler struct {
 	// Notifications はユーザーIDごと、Threads はスレッドのルート投稿IDごとの SSE 購読を管理する。
 	Notifications *realtime.Hub
 	Threads       *realtime.Hub
+	// Shutdown はプロセス終了時に閉じられる。SSE の配信ループはこれを見て戻る。
+	Shutdown <-chan struct{}
 }
 
 func (h *Handler) respondJSON(w http.ResponseWriter, status int, v any) {
@@ -48,10 +51,17 @@ func (h *Handler) pagination(r *http.Request) (page, perPage, offset int) {
 	return
 }
 
-// fetchUser は users テーブルから1件取得する
+// fetchUser は users テーブルから1件取得する。閲覧者はリクエストから解決する。
 func (h *Handler) fetchUser(r *http.Request, userID int64) (model.User, error) {
+	viewerID, _ := h.currentUserID(r)
+	return h.fetchUserCtx(r.Context(), userID, viewerID)
+}
+
+// fetchUserCtx は閲覧者を明示して users テーブルから1件取得する。
+// リクエストの無いバックグラウンド処理から使えるようにするための形。
+func (h *Handler) fetchUserCtx(ctx context.Context, userID, viewerID int64) (model.User, error) {
 	var u model.User
-	err := h.DB.QueryRowContext(r.Context(),
+	err := h.DB.QueryRowContext(ctx,
 		`SELECT id, username, display_name, bio, created_at FROM users WHERE id = ?`,
 		userID,
 	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Bio, &u.CreatedAt)
@@ -61,20 +71,20 @@ func (h *Handler) fetchUser(r *http.Request, userID int64) (model.User, error) {
 	u.AvatarColor = model.AvatarColor(u.ID)
 
 	// フォロワー数・フォロー数・投稿数を取得
-	h.DB.QueryRowContext(r.Context(),
+	h.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM follows WHERE followee_id = ?`, u.ID,
 	).Scan(&u.FollowersCount)
 
-	h.DB.QueryRowContext(r.Context(),
+	h.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM follows WHERE follower_id = ?`, u.ID,
 	).Scan(&u.FollowingCount)
 
-	h.DB.QueryRowContext(r.Context(),
+	h.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM posts WHERE user_id = ?`, u.ID,
 	).Scan(&u.PostCount)
 
-	if viewerID, ok := h.currentUserID(r); ok && viewerID != u.ID {
-		h.DB.QueryRowContext(r.Context(),
+	if viewerID > 0 && viewerID != u.ID {
+		h.DB.QueryRowContext(ctx,
 			`SELECT EXISTS(SELECT 1 FROM follows WHERE follower_id = ? AND followee_id = ?)`,
 			viewerID, u.ID,
 		).Scan(&u.FollowedByMe)
@@ -85,9 +95,15 @@ func (h *Handler) fetchUser(r *http.Request, userID int64) (model.User, error) {
 
 // fetchPost は posts テーブルから1件取得し、関連データを付加する
 func (h *Handler) fetchPost(r *http.Request, postID, viewerID int64) (model.Post, error) {
+	return h.fetchPostCtx(r.Context(), postID, viewerID)
+}
+
+// fetchPostCtx はリクエストの無いバックグラウンド処理からも呼べる fetchPost。
+// viewerID が 0 なら閲覧者に依存する項目 (liked_by_me など) は付けない。
+func (h *Handler) fetchPostCtx(ctx context.Context, postID, viewerID int64) (model.Post, error) {
 	var p model.Post
 	var userID int64
-	err := h.DB.QueryRowContext(r.Context(),
+	err := h.DB.QueryRowContext(ctx,
 		`SELECT id, user_id, content, is_repost, original_post_id, parent_post_id, created_at
 		 FROM posts WHERE id = ?`,
 		postID,
@@ -96,29 +112,29 @@ func (h *Handler) fetchPost(r *http.Request, postID, viewerID int64) (model.Post
 		return p, err
 	}
 
-	author, err := h.fetchUser(r, userID)
+	author, err := h.fetchUserCtx(ctx, userID, viewerID)
 	if err != nil {
 		return p, err
 	}
 	p.Author = author
 
-	h.DB.QueryRowContext(r.Context(),
+	h.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM likes WHERE post_id = ?`, p.ID,
 	).Scan(&p.LikesCount)
 
-	h.DB.QueryRowContext(r.Context(),
+	h.DB.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM reposts WHERE post_id = ?`, p.ID,
 	).Scan(&p.RepostsCount)
 
-	p.RepliesCount = h.countReplies(r, p.ID, 0)
+	p.RepliesCount = h.countRepliesCtx(ctx, p.ID, 0)
 
 	if viewerID > 0 {
-		h.DB.QueryRowContext(r.Context(),
+		h.DB.QueryRowContext(ctx,
 			`SELECT EXISTS(SELECT 1 FROM likes WHERE user_id = ? AND post_id = ?)`,
 			viewerID, p.ID,
 		).Scan(&p.LikedByMe)
 
-		h.DB.QueryRowContext(r.Context(),
+		h.DB.QueryRowContext(ctx,
 			`SELECT EXISTS(SELECT 1 FROM reposts WHERE user_id = ? AND post_id = ?)`,
 			viewerID, p.ID,
 		).Scan(&p.RepostedByMe)
@@ -127,7 +143,7 @@ func (h *Handler) fetchPost(r *http.Request, postID, viewerID int64) (model.Post
 	// 返信の場合、返信先の投稿者を解決する
 	if p.ParentPostID != nil {
 		var username, displayName string
-		err := h.DB.QueryRowContext(r.Context(), `
+		err := h.DB.QueryRowContext(ctx, `
 			SELECT u.username, u.display_name
 			FROM posts parent JOIN users u ON u.id = parent.user_id
 			WHERE parent.id = ?
@@ -140,7 +156,7 @@ func (h *Handler) fetchPost(r *http.Request, postID, viewerID int64) (model.Post
 
 	// リポストの場合、何をリポストしたか分かるように元投稿を解決する
 	if p.IsRepost && p.OriginalPostID != nil && *p.OriginalPostID != p.ID {
-		if original, err := h.fetchPost(r, *p.OriginalPostID, viewerID); err == nil {
+		if original, err := h.fetchPostCtx(ctx, *p.OriginalPostID, viewerID); err == nil {
 			p.OriginalPost = &original
 		}
 	}
@@ -153,11 +169,15 @@ const maxThreadDepth = 50
 
 // countReplies は投稿にぶら下がる返信の数を返す。ネストした返信も含めた合計。
 func (h *Handler) countReplies(r *http.Request, postID int64, depth int) int {
+	return h.countRepliesCtx(r.Context(), postID, depth)
+}
+
+func (h *Handler) countRepliesCtx(ctx context.Context, postID int64, depth int) int {
 	if depth >= maxThreadDepth {
 		return 0
 	}
 
-	rows, err := h.DB.QueryContext(r.Context(),
+	rows, err := h.DB.QueryContext(ctx,
 		`SELECT id FROM posts WHERE parent_post_id = ?`, postID)
 	if err != nil {
 		return 0
@@ -173,17 +193,21 @@ func (h *Handler) countReplies(r *http.Request, postID int64, depth int) int {
 
 	total := len(ids)
 	for _, id := range ids {
-		total += h.countReplies(r, id, depth+1)
+		total += h.countRepliesCtx(ctx, id, depth+1)
 	}
 	return total
 }
 
 // threadRootID はスレッドの起点となる投稿IDを返す。
 func (h *Handler) threadRootID(r *http.Request, postID int64) int64 {
+	return h.threadRootIDCtx(r.Context(), postID)
+}
+
+func (h *Handler) threadRootIDCtx(ctx context.Context, postID int64) int64 {
 	current := postID
 	for i := 0; i < maxThreadDepth; i++ {
 		var parent *int64
-		err := h.DB.QueryRowContext(r.Context(),
+		err := h.DB.QueryRowContext(ctx,
 			`SELECT parent_post_id FROM posts WHERE id = ?`, current,
 		).Scan(&parent)
 		if err != nil || parent == nil {

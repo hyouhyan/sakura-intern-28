@@ -22,3 +22,4 @@
 | ファイル | 内容 |
 |---|---|
 | [`002_repost_unique.sql`](../migrations/002_repost_unique.sql) | `posts` に `(user_id, original_post_id)` の一意制約を追加し、リポストの重複行を防ぐ |
+| [`003_notifications_index.sql`](../migrations/003_notifications_index.sql) | `notifications` に `(user_id, id)` の索引を追加 |

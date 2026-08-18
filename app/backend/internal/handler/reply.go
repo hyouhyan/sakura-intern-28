@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"sakuravel/internal/realtime"
 )
 
 // CreateReply は指定した投稿への返信を作成する。返信も posts の1行として保存する。
@@ -57,8 +56,9 @@ func (h *Handler) CreateReply(w http.ResponseWriter, r *http.Request) {
 	// 通知は直接の返信先の著者にのみ送る
 	createNotification(h, r, parentAuthorID, "reply", myID, &postID)
 
-	// 同じスレッドを開いている購読者へリアルタイム配信する
-	h.Threads.Publish(h.threadRootID(r, parentID), realtime.Event{Type: "reply", Data: post})
+	// SSE への配信はここでは行わない。複数インスタンス構成では同じスレッドを
+	// 開いている購読者が別のインスタンスに繋がっていることが多く、自分の Hub に
+	// 流しても届かない。配信は RunThreadFanout が DB を見て行う。
 
 	h.respondJSON(w, http.StatusCreated, map[string]any{"post": post})
 }

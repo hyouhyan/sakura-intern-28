@@ -3,7 +3,6 @@ package handler
 import (
 	"log"
 	"net/http"
-	"sakuravel/internal/realtime"
 )
 
 func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
@@ -157,12 +156,9 @@ func createNotification(h *Handler, r *http.Request, userID int64, ntype string,
 	if err != nil {
 		// 通知はリクエスト本体の成否を左右しないため、記録だけして続行する
 		log.Printf("createNotification(user=%d type=%s): %v", userID, ntype, err)
-		return
 	}
 
-	// 宛先ユーザーが SSE で接続していればバッジ更新用に通知する
-	h.Notifications.Publish(userID, realtime.Event{
-		Type: "notification",
-		Data: map[string]any{"type": ntype, "post_id": postID},
-	})
+	// SSE への配信はここでは行わない。複数インスタンス構成では宛先の購読者が
+	// 別のインスタンスに繋がっていることの方が多く、自分の Hub に流しても届かない。
+	// 配信は各インスタンスの RunNotificationFanout が DB を見て行う。
 }
