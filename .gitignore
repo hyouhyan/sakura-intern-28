@@ -1,1 +1,5 @@
 .DS_Store
+
+# .tfstate files (should only ever exist under infra/, never at repo root)
+*.tfstate
+*.tfstate.*
