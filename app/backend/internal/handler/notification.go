@@ -48,29 +48,79 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		rawNotifs = append(rawNotifs, n)
 	}
 
+	actorIDs := make([]int64, 0, len(rawNotifs))
+	postIDs := make([]int64, 0, len(rawNotifs))
+	for _, rn := range rawNotifs {
+		actorIDs = append(actorIDs, rn.actorID)
+		if rn.postID != nil {
+			postIDs = append(postIDs, *rn.postID)
+		}
+	}
+
+	actorsByID, err := h.fetchUsersBatch(r, actorIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+
+	// 対象投稿の本文の抜粋を付ける。
+	// 返信通知の post_id は返信そのものを指すので、返信先の抜粋も添える。
+	type postInfo struct {
+		content  *string
+		parentID *int64
+	}
+	postInfoByID := make(map[int64]postInfo, len(postIDs))
+	if len(postIDs) > 0 {
+		placeholders, args := int64InClause(dedupeInt64(postIDs))
+		if rows, err := h.DB.QueryContext(r.Context(),
+			`SELECT id, content, parent_post_id FROM posts WHERE id IN (`+placeholders+`)`, args...,
+		); err == nil {
+			for rows.Next() {
+				var id int64
+				var info postInfo
+				rows.Scan(&id, &info.content, &info.parentID)
+				postInfoByID[id] = info
+			}
+			rows.Close()
+		}
+	}
+
+	var parentIDs []int64
+	for _, info := range postInfoByID {
+		if info.parentID != nil {
+			parentIDs = append(parentIDs, *info.parentID)
+		}
+	}
+	parentContentByID := make(map[int64]*string, len(parentIDs))
+	if len(parentIDs) > 0 {
+		placeholders, args := int64InClause(dedupeInt64(parentIDs))
+		if rows, err := h.DB.QueryContext(r.Context(),
+			`SELECT id, content FROM posts WHERE id IN (`+placeholders+`)`, args...,
+		); err == nil {
+			for rows.Next() {
+				var id int64
+				var content *string
+				rows.Scan(&id, &content)
+				parentContentByID[id] = content
+			}
+			rows.Close()
+		}
+	}
+
 	notifs := make([]any, 0, len(rawNotifs))
 	for _, rn := range rawNotifs {
-		actor, err := h.fetchUser(r, rn.actorID)
-		if err != nil {
+		actor, ok := actorsByID[rn.actorID]
+		if !ok {
 			continue
 		}
 
-		// 対象投稿の本文の抜粋を付ける。
-		// 返信通知の post_id は返信そのものを指すので、返信先の抜粋も添える。
 		var excerpt, parentExcerpt *string
 		if rn.postID != nil {
-			var content *string
-			var parentID *int64
-			if err := h.DB.QueryRowContext(r.Context(),
-				`SELECT content, parent_post_id FROM posts WHERE id = ?`, *rn.postID,
-			).Scan(&content, &parentID); err == nil {
-				excerpt = excerptOf(content)
-				if parentID != nil {
-					var parentContent *string
-					if err := h.DB.QueryRowContext(r.Context(),
-						`SELECT content FROM posts WHERE id = ?`, *parentID,
-					).Scan(&parentContent); err == nil {
-						parentExcerpt = excerptOf(parentContent)
+			if info, ok := postInfoByID[*rn.postID]; ok {
+				excerpt = excerptOf(info.content)
+				if info.parentID != nil {
+					if content, ok := parentContentByID[*info.parentID]; ok {
+						parentExcerpt = excerptOf(content)
 					}
 				}
 			}

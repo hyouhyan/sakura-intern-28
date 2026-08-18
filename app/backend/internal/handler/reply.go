@@ -82,16 +82,22 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 祖先をたどる（古い順に並べ替えて返す）
-	ancestors := make([]any, 0)
-	parent := post.ParentPostID
-	for depth := 0; parent != nil && depth < maxThreadDepth; depth++ {
-		a, err := h.fetchPost(r, *parent, viewerID)
-		if err != nil {
-			break
+	// 祖先の投稿IDを再帰CTEで一括取得する（古い順）
+	ancestorIDs, err := h.fetchAncestorIDs(r, postID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	ancestorsByID, err := h.fetchPostsBatch(r, ancestorIDs, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	ancestors := make([]any, 0, len(ancestorIDs))
+	for _, id := range ancestorIDs {
+		if a, ok := ancestorsByID[id]; ok {
+			ancestors = append(ancestors, a)
 		}
-		ancestors = append([]any{a}, ancestors...)
-		parent = a.ParentPostID
 	}
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
@@ -124,10 +130,18 @@ func (h *Handler) fetchReplyTree(r *http.Request, postID, viewerID int64, depth 
 		ids = append(ids, id)
 	}
 	rows.Close()
+	if len(ids) == 0 {
+		return nodes
+	}
+
+	postsByID, err := h.fetchPostsBatch(r, ids, viewerID)
+	if err != nil {
+		return nodes
+	}
 
 	for _, id := range ids {
-		p, err := h.fetchPost(r, id, viewerID)
-		if err != nil {
+		p, ok := postsByID[id]
+		if !ok {
 			continue
 		}
 		nodes = append(nodes, map[string]any{

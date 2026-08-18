@@ -49,10 +49,14 @@ func (h *Handler) searchPosts(w http.ResponseWriter, r *http.Request, q string, 
 		postIDs = append(postIDs, postID)
 	}
 
+	postsByID, err := h.fetchPostsBatch(r, postIDs, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 	posts := make([]any, 0, len(postIDs))
 	for _, postID := range postIDs {
-		p, err := h.fetchPost(r, postID, viewerID)
-		if err == nil {
+		if p, ok := postsByID[postID]; ok {
 			posts = append(posts, p)
 		}
 	}
@@ -91,10 +95,14 @@ func (h *Handler) searchUsers(w http.ResponseWriter, r *http.Request, q string, 
 		userIDs = append(userIDs, uid)
 	}
 
+	usersByID, err := h.fetchUsersBatch(r, userIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 	users := make([]any, 0, len(userIDs))
 	for _, uid := range userIDs {
-		u, err := h.fetchUser(r, uid)
-		if err == nil {
+		if u, ok := usersByID[uid]; ok {
 			users = append(users, u)
 		}
 	}

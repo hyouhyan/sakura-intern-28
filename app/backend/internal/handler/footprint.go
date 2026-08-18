@@ -48,10 +48,20 @@ func (h *Handler) GetFootprints(w http.ResponseWriter, r *http.Request) {
 		rawFps = append(rawFps, fp)
 	}
 
+	visitorIDs := make([]int64, len(rawFps))
+	for i, rf := range rawFps {
+		visitorIDs[i] = rf.visitorID
+	}
+	visitorsByID, err := h.fetchUsersBatch(r, visitorIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+
 	fps := make([]any, 0, len(rawFps))
 	for _, rf := range rawFps {
-		visitor, err := h.fetchUser(r, rf.visitorID)
-		if err != nil {
+		visitor, ok := visitorsByID[rf.visitorID]
+		if !ok {
 			continue
 		}
 		fps = append(fps, map[string]any{
