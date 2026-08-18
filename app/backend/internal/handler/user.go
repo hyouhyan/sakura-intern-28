@@ -174,9 +174,12 @@ func (h *Handler) Unfollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.ExecContext(r.Context(),
+	if _, err := h.DB.ExecContext(r.Context(),
 		`DELETE FROM follows WHERE follower_id = ? AND followee_id = ?`,
 		myID, targetID,
-	)
+	); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 	h.respondJSON(w, http.StatusOK, map[string]string{"message": "unfollowed"})
 }

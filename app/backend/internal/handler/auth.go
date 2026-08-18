@@ -166,7 +166,12 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.ExecContext(r.Context(), `DELETE FROM sessions WHERE id = ?`, cookie.Value)
+	if _, err := h.DB.ExecContext(r.Context(),
+		`DELETE FROM sessions WHERE id = ?`, cookie.Value,
+	); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 
 	http.SetCookie(w, h.sessionCookie("", time.Unix(0, 0)))
 	h.respondJSON(w, http.StatusOK, map[string]string{"message": "logged out"})

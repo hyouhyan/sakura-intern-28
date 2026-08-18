@@ -52,11 +52,14 @@ func (h *Handler) Like(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.ExecContext(r.Context(),
+	if _, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO likes (user_id, post_id) VALUES (?, ?)
 		 ON DUPLICATE KEY UPDATE user_id = user_id`,
 		myID, req.PostID,
-	)
+	); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 
 	// 投稿者に通知
 	var postOwnerID int64
@@ -82,9 +85,12 @@ func (h *Handler) Unlike(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.ExecContext(r.Context(),
+	if _, err := h.DB.ExecContext(r.Context(),
 		`DELETE FROM likes WHERE user_id = ? AND post_id = ?`, myID, postID,
-	)
+	); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 
 	var count int
 	h.DB.QueryRowContext(r.Context(),

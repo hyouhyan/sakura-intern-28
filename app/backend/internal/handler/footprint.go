@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 )
 
@@ -8,10 +9,13 @@ func recordFootprint(h *Handler, r *http.Request, userID, visitorID int64) {
 	if userID == visitorID {
 		return
 	}
-	h.DB.ExecContext(r.Context(),
+	// 足跡の記録に失敗してもプロフィール表示自体は返したいので、記録だけして続行する
+	if _, err := h.DB.ExecContext(r.Context(),
 		`INSERT INTO footprints (user_id, visitor_id) VALUES (?, ?)`,
 		userID, visitorID,
-	)
+	); err != nil {
+		log.Printf("recordFootprint(user=%d visitor=%d): %v", userID, visitorID, err)
+	}
 }
 
 func (h *Handler) GetFootprints(w http.ResponseWriter, r *http.Request) {

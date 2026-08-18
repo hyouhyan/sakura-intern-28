@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"sakuravel/internal/realtime"
 )
@@ -111,10 +112,13 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) MarkNotificationsRead(w http.ResponseWriter, r *http.Request) {
 	myID, _ := h.currentUserID(r)
-	h.DB.ExecContext(r.Context(),
+	if _, err := h.DB.ExecContext(r.Context(),
 		`UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE`,
 		myID,
-	)
+	); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
 	h.respondJSON(w, http.StatusOK, map[string]string{"message": "ok"})
 }
 
@@ -151,6 +155,8 @@ func createNotification(h *Handler, r *http.Request, userID int64, ntype string,
 		userID, ntype, actorID, postID,
 	)
 	if err != nil {
+		// 通知はリクエスト本体の成否を左右しないため、記録だけして続行する
+		log.Printf("createNotification(user=%d type=%s): %v", userID, ntype, err)
 		return
 	}
 
