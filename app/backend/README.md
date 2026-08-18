@@ -68,6 +68,7 @@ flowchart LR
     API -->|"database/sql (go-sql-driver/mysql)"| DB
 ```
 
+- SSE の配信は、各インスタンスが定期的にデータベースを確認して行います。複数インスタンス構成では、イベントを起こしたインスタンスと購読者が接続しているインスタンスが一致しないため、プロセス内の購読者一覧（`internal/realtime`）へ直接配信しても届かないためです。インスタンス同士は通信しません。
 - 認証は Cookie（`session_id`）ベースです。ログイン成功時に発行された `session_id` を `Cookie` ヘッダーで送信することで認証済みリクエストとして扱われます。
 - `db` コンテナの初回起動時のみ `migrations/*.sql` が MariaDB の初期化フックで自動実行され、スキーマが作成されます（既にデータボリュームがある場合は実行されません）。
 
@@ -237,6 +238,7 @@ docker compose up -d
 
 ```bash
 docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/002_repost_unique.sql
+docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/003_notifications_index.sql
 ```
 
 ### 環境変数
@@ -249,6 +251,7 @@ docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/00
 | `COOKIE_SECURE` | `false` | `true` でセッションCookieに `Secure` + `SameSite=None` を付与 |
 | `DB_MAX_OPEN_CONNS` | `20` | DB接続プールの最大接続数 |
 | `DB_MAX_IDLE_CONNS` | `10` | DB接続プールのアイドル接続数 |
+| `FANOUT_INTERVAL_MS` | `1000` | SSE 配信のために DB を確認する間隔（ミリ秒） |
 
 複数インスタンスで動かす場合、DBへの接続数の合計は
 インスタンス数 × `DB_MAX_OPEN_CONNS` になります。DB 側の `max_connections`
