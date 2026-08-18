@@ -19,7 +19,7 @@ variable "sakura_access_token_secret" {
 variable "zone" {
   description = "リソースを作成するゾーン。"
   type        = string
-  default     = "tk1a" # 石狩第2ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択
+  default     = "is1a" # 石狩第1ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択
 }
 
 ########################################
@@ -55,9 +55,14 @@ variable "server_ssh_public_key_path" {
 ########################################
 
 variable "cluster_name" {
-  description = "作成するクラスタの名前"
+  description = "作成するクラスタの名前 (20文字以内)"
   type        = string
-  default     = "sakuravel-cluster"
+  default     = "sakuravel-is1a"
+
+  validation {
+    condition     = length(var.cluster_name) <= 20
+    error_message = "クラスタ名は20文字以内にしてください。"
+  }
 }
 
 variable "cluster_lets_encrypt_email" {
