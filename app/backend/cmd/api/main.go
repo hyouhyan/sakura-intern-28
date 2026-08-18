@@ -39,6 +39,11 @@ func main() {
 func routes(h *handler.Handler, auth *middleware.Auth) http.Handler {
 	mux := http.NewServeMux()
 
+	// ヘルスチェック。ロードバランサが定期的に叩くので DB には触らない。
+	// "/{$}" は完全一致なので、未知のパスは従来どおり 404 のまま。
+	mux.HandleFunc("GET /{$}", h.Health)
+	mux.HandleFunc("GET /healthz", h.Health)
+
 	// 認証
 	mux.HandleFunc("POST /register", h.Register)
 	mux.HandleFunc("POST /login", h.Login)
