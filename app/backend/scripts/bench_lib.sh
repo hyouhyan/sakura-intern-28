@@ -16,6 +16,16 @@ COOKIE_JAR="$BACKEND_DIR/cookies.txt"
 DB_USER=sakuravel
 DB_PASS=password
 DB_NAME=sakuravel
+DB_ROOT_PASS=password
+
+# sakuravelユーザーはUnixソケット経由(=localhost扱い)だと権限マッチングで
+# 弾かれることがある（mysqladmin pingは通るがmysqlコマンド本体の接続は
+# 拒否される、という既知のハマりどころ）。復元・管理系操作は確実に全権限を
+# 持つrootをTCP接続(-h127.0.0.1)で使う。
+mysql_root() {
+  docker compose -f "$COMPOSE_FILE" exec -T db \
+    mysql -h 127.0.0.1 -u root -p"$DB_ROOT_PASS" "$@"
+}
 
 SERIAL_N=100
 CONCURRENT_N=200
@@ -86,8 +96,7 @@ restore_fixture() {
 先に scripts/make_seed_fixture.sh を実行してください（1回だけでよい。以後は両ブランチで使い回す）。"
   fi
   log "seed_fixture.sql (${size} bytes) を復元中..."
-  docker compose -f "$COMPOSE_FILE" exec -T db \
-    mysql -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" < "$FIXTURE_FILE"
+  mysql_root "$DB_NAME" < "$FIXTURE_FILE"
 }
 
 # 計測用アカウントを新規登録する。シードユーザーはパスワードが共有されて
@@ -126,8 +135,7 @@ setup_bench_user() {
 # 同じ seed_fixture.sql から復元しているので、この選定結果は両ブランチで
 # 一致する。
 pick_thread_root() {
-  THREAD_ROOT_ID="$(docker compose -f "$COMPOSE_FILE" exec -T db \
-    mysql -N -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e \
+  THREAD_ROOT_ID="$(mysql_root -N "$DB_NAME" -e \
     "SELECT parent_post_id FROM posts WHERE parent_post_id IS NOT NULL GROUP BY parent_post_id ORDER BY COUNT(*) DESC LIMIT 1;" \
     2>/dev/null | tr -d '\r')"
   [[ -n "$THREAD_ROOT_ID" ]] || die "返信付きの投稿が見つかりませんでした（シードデータを確認してください）"
@@ -138,14 +146,14 @@ pick_thread_root() {
 # N+1解消の効果を最も直接的に裏付ける指標。
 count_queries() {
   local url="$1"; shift
-  docker compose -f "$COMPOSE_FILE" exec -T db mysql -u root -p"$DB_PASS" -e \
+  mysql_root -e \
     "SET GLOBAL general_log='OFF'; TRUNCATE TABLE mysql.general_log; SET GLOBAL log_output='TABLE'; SET GLOBAL general_log='ON';" \
     >/dev/null 2>&1
 
   curl -s -o /dev/null "$url" "$@"
   sleep 1
 
-  docker compose -f "$COMPOSE_FILE" exec -T db mysql -N -u root -p"$DB_PASS" -e \
+  mysql_root -N -e \
     "SET GLOBAL general_log='OFF'; SELECT COUNT(*) FROM mysql.general_log WHERE command_type='Query';" \
     2>/dev/null | tr -d '\r' | tail -1
 }
