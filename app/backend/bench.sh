@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # bench.sh <URL> [追加のcurlオプション...]
+# 環境変数 N でリクエスト数を上書き可能（デフォルト100）。
 url="$1"; shift
-n=100
+n="${N:-100}"
 for i in $(seq 1 "$n"); do
   curl -s -o /dev/null -w '%{time_total}\n' "$url" "$@"
 done | sort -n | awk -v n="$n" '

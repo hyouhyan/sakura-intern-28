@@ -22,3 +22,9 @@ bench.sh, bench_concurrent.sh
   - count=100 avg=0.0007 p50=0.0007 p95=0.0009 p99=0.0013 max=0.0013
   - n=200 total=0.19s rps=1061.47 avg=0.0016 p50=0.0010 p95=0.0044
 - 
+#### 改善前 (17-experiment)
+
+計測日時: 2026-08-19 00:48:04
+
+| エンドポイント | 直列 (bench.sh, n=100) | 並列 (bench_concurrent.sh, n=200 c=10) | クエリ本数 |
+|---|---|---|---|
