@@ -21,7 +21,7 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 	listArgs := append([]any{myID}, typeArgs...)
 	listArgs = append(listArgs, perPage, offset)
 	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id, type, actor_id, post_id, is_read, created_at
+		SELECT id, type, actor_id, post_id, is_read, created_at, COUNT(*) OVER() AS total
 		FROM notifications
 		WHERE user_id = ?`+typeCond+`
 		ORDER BY created_at DESC, id DESC
@@ -41,11 +41,22 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		isRead  bool
 	}
 	var rawNotifs []notifRow
+	var total int
 	for rows.Next() {
 		var n notifRow
 		var createdAt any
-		rows.Scan(&n.id, &n.ntype, &n.actorID, &n.postID, &n.isRead, &createdAt)
+		rows.Scan(&n.id, &n.ntype, &n.actorID, &n.postID, &n.isRead, &createdAt, &total)
 		rawNotifs = append(rawNotifs, n)
+	}
+	rows.Close()
+
+	// ウィンドウ関数は返ってきた行に対して総件数を付与するため、OFFSET が
+	// ページ末尾を超えて0件になるケースだけフォールバックで COUNT(*) する。
+	if len(rawNotifs) == 0 && offset > 0 {
+		h.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM notifications WHERE user_id = ?`+typeCond,
+			append([]any{myID}, typeArgs...)...,
+		).Scan(&total)
 	}
 
 	actorIDs := make([]int64, 0, len(rawNotifs))
@@ -137,18 +148,13 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// unread_count は total（絞り込み後の件数）とは別のバッジ用の値なので、
+	// ページングとは独立して常に全種別で個別に取得する。
 	var unreadCount int
 	h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = FALSE`,
 		myID,
 	).Scan(&unreadCount)
-
-	// total は絞り込み後の件数（ページングに使う）。unread_count はバッジ用なので全種別のまま。
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM notifications WHERE user_id = ?`+typeCond,
-		append([]any{myID}, typeArgs...)...,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"notifications": notifs,

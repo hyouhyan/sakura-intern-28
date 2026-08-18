@@ -7,8 +7,11 @@ import (
 	"sakuravel/internal/middleware"
 	"sakuravel/internal/model"
 	"sakuravel/internal/realtime"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 type Handler struct {
@@ -19,6 +22,11 @@ type Handler struct {
 	// Notifications はユーザーIDごと、Threads はスレッドのルート投稿IDごとの SSE 購読を管理する。
 	Notifications *realtime.Hub
 	Threads       *realtime.Hub
+
+	// recommendedMu / recommendedCache は recommended フィードの上位ランキング
+	// キャッシュを保護する。集計クエリ自体が重いため、結果を一定時間使い回す。
+	recommendedMu    sync.Mutex
+	recommendedCache *recommendedCacheEntry
 }
 
 func (h *Handler) respondJSON(w http.ResponseWriter, status int, v any) {
@@ -74,6 +82,139 @@ func dedupeInt64(ids []int64) []int64 {
 		}
 	}
 	return out
+}
+
+// queryIDsWithTotal は ID 一覧をページングしつつ、`COUNT(*) OVER()` で
+// 総件数も同じクエリで取得する。一覧取得と総件数取得を別クエリにすると
+// 同じ条件を2回スキャンすることになるため、ウィンドウ関数でまとめて
+// 1回のクエリに収める。
+// listQuery は `SELECT id, COUNT(*) OVER() AS total FROM ... LIMIT ? OFFSET ?`
+// の形をしていること。ウィンドウ関数は「返ってきた行」に対して算出される
+// ため、OFFSET がページ末尾を超えて0件になるケースだけ総件数が取れない。
+// この場合のみ countQuery（通常の COUNT(*)）をフォールバックとして実行する。
+func (h *Handler) queryIDsWithTotal(r *http.Request, listQuery string, listArgs []any, offset int, countQuery string, countArgs []any) ([]int64, int, error) {
+	rows, err := h.DB.QueryContext(r.Context(), listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var ids []int64
+	var total int
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id, &total); err != nil {
+			return nil, 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	if len(ids) == 0 && offset > 0 {
+		if err := h.DB.QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+	}
+	return ids, total, nil
+}
+
+// recommendedCacheTTL はランキングキャッシュの有効期間。
+// recommendedCacheSize はキャッシュするランキングの件数（per_page 最大50件 × 10ページ分）。
+const (
+	recommendedCacheTTL  = 30 * time.Second
+	recommendedCacheSize = 500
+)
+
+type recommendedCacheEntry struct {
+	ids       []int64
+	expiresAt time.Time
+}
+
+// recommendedRankedIDs は直近24時間のいいね数が多い順に並べた投稿IDを
+// 最大 recommendedCacheSize 件返す。「ORDER BY COUNT(...) DESC」という
+// 集計ソートの性質上、母集団を集計しないと順位が決まらずインデックスだけ
+// では解決できないため、結果を一定時間プロセス内メモリにキャッシュして
+// 使い回す。sync.Mutex で保護し、キャッシュ切れ時の再計算が同時に何度も
+// 走らないようにしている。
+func (h *Handler) recommendedRankedIDs(r *http.Request) ([]int64, error) {
+	h.recommendedMu.Lock()
+	defer h.recommendedMu.Unlock()
+
+	if h.recommendedCache != nil && time.Now().Before(h.recommendedCache.expiresAt) {
+		return h.recommendedCache.ids, nil
+	}
+
+	ids, err := h.computeRecommendedRankedIDs(r)
+	if err != nil {
+		return nil, err
+	}
+
+	h.recommendedCache = &recommendedCacheEntry{ids: ids, expiresAt: time.Now().Add(recommendedCacheTTL)}
+	return ids, nil
+}
+
+// computeRecommendedRankedIDs はランキングを実際に集計する。likes を起点に
+// JOIN することで posts.id の PRIMARY KEY を使った eq_ref 結合になり、
+// 新規インデックス無しで Block Nested Loop（総当たり結合）を回避できる。
+// いいねが少なく上位 recommendedCacheSize 件に満たない場合は、残り枠を
+// 最新投稿で埋め、常にページが埋まる挙動を維持する。
+func (h *Handler) computeRecommendedRankedIDs(r *http.Request) ([]int64, error) {
+	rows, err := h.DB.QueryContext(r.Context(), `
+		SELECT p.id
+		FROM likes l
+		JOIN posts p ON p.id = l.post_id
+		WHERE l.created_at > NOW() - INTERVAL 24 HOUR AND p.parent_post_id IS NULL
+		GROUP BY p.id
+		ORDER BY COUNT(*) DESC, p.created_at DESC, p.id DESC
+		LIMIT ?
+	`, recommendedCacheSize)
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	if needed := recommendedCacheSize - len(ids); needed > 0 {
+		query := `SELECT id FROM posts WHERE parent_post_id IS NULL`
+		var args []any
+		if len(ids) > 0 {
+			placeholders, inArgs := int64InClause(ids)
+			query += ` AND id NOT IN (` + placeholders + `)`
+			args = append(args, inArgs...)
+		}
+		query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+		args = append(args, needed)
+
+		fillRows, err := h.DB.QueryContext(r.Context(), query, args...)
+		if err != nil {
+			return nil, err
+		}
+		for fillRows.Next() {
+			var id int64
+			if err := fillRows.Scan(&id); err != nil {
+				fillRows.Close()
+				return nil, err
+			}
+			ids = append(ids, id)
+		}
+		if err := fillRows.Close(); err != nil {
+			return nil, err
+		}
+	}
+
+	return ids, nil
 }
 
 // fetchUser は users テーブルから1件取得する
@@ -440,6 +581,63 @@ func (h *Handler) fetchAncestorIDs(r *http.Request, postID int64) ([]int64, erro
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// replyEdge は返信ツリーの1ノード分の親子関係と兄弟順ソート用の情報。
+type replyEdge struct {
+	id           int64
+	parentPostID int64
+	createdAt    time.Time
+}
+
+// fetchDescendantEdges は対象投稿配下の返信をすべて再帰CTEで一括取得し、
+// 親投稿IDごとの子投稿ID一覧（作成日時の古い順）を返す。ノードごとに
+// 「子を取得する」クエリを1件ずつ発行する逐次探索を避けるため、まず
+// idと親子関係だけを安いクエリで辿り、あとで対象ノード全件をまとめて
+// バッチ取得する。
+func (h *Handler) fetchDescendantEdges(r *http.Request, rootID int64) (map[int64][]int64, error) {
+	rows, err := h.DB.QueryContext(r.Context(), `
+		WITH RECURSIVE descendants AS (
+			SELECT id, parent_post_id, created_at, 0 AS depth FROM posts WHERE parent_post_id = ?
+			UNION ALL
+			SELECT p.id, p.parent_post_id, p.created_at, d.depth + 1
+			FROM posts p JOIN descendants d ON p.parent_post_id = d.id
+			WHERE d.depth + 1 <= ?
+		)
+		SELECT id, parent_post_id, created_at FROM descendants
+	`, rootID, maxThreadDepth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	edgesByParent := make(map[int64][]replyEdge)
+	for rows.Next() {
+		var e replyEdge
+		if err := rows.Scan(&e.id, &e.parentPostID, &e.createdAt); err != nil {
+			return nil, err
+		}
+		edgesByParent[e.parentPostID] = append(edgesByParent[e.parentPostID], e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	childrenOf := make(map[int64][]int64, len(edgesByParent))
+	for parentID, edges := range edgesByParent {
+		sort.Slice(edges, func(i, j int) bool {
+			if !edges[i].createdAt.Equal(edges[j].createdAt) {
+				return edges[i].createdAt.Before(edges[j].createdAt)
+			}
+			return edges[i].id < edges[j].id
+		})
+		ids := make([]int64, len(edges))
+		for i, e := range edges {
+			ids[i] = e.id
+		}
+		childrenOf[parentID] = ids
+	}
+	return childrenOf, nil
 }
 
 // threadRootID はスレッドの起点となる投稿IDを返す。
