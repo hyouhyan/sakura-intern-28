@@ -150,6 +150,7 @@ erDiagram
 補足:
 - `posts.content` は `NULL` かつ `is_repost = true` の場合があります。これはリポストが「元投稿とは別の行」として `posts` テーブルに作成される仕様のためです（`original_post_id` で元投稿を参照）。
 - `follows` / `likes` / `reposts` は複合主キー（`user_id, post_id` など）により重複登録を防止しています。
+- リポストで作られる `posts` の行も `(user_id, original_post_id)` の一意制約で重複を防いでいます。通常の投稿は `original_post_id` が `NULL` のため、この制約の対象になりません。
 - `notifications.type` は `like` / `follow` / `repost` / `reply` / `footprint` のいずれかです。
 - 返信もリポストと同様に「`posts` テーブルの別の行」として作成されます（`parent_post_id` で返信先を参照）。`parent_post_id` が `NULL` なら通常の投稿です。
 
@@ -230,6 +231,28 @@ docker compose up -d
 - MariaDB: `localhost:3306`（DB: `sakuravel` / user: `sakuravel` / password: `password`）
 
 初回起動時のみ `migrations/*.sql` が自動実行され、スキーマが作成されます。
+
+既にデータボリュームがある環境では初期化フックが走らないため、後から追加した
+マイグレーションは手動で適用してください。
+
+```bash
+docker compose exec -T db mysql -usakuravel -ppassword sakuravel < migrations/002_repost_unique.sql
+```
+
+### 環境変数
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `DATABASE_URL` | （必須） | MariaDB への接続文字列 |
+| `PORT` | `8080` | API の待ち受けポート |
+| `ALLOWED_ORIGIN` | `http://localhost:3000` | CORS で許可するオリジン |
+| `COOKIE_SECURE` | `false` | `true` でセッションCookieに `Secure` + `SameSite=None` を付与 |
+| `DB_MAX_OPEN_CONNS` | `20` | DB接続プールの最大接続数 |
+| `DB_MAX_IDLE_CONNS` | `10` | DB接続プールのアイドル接続数 |
+
+複数インスタンスで動かす場合、DBへの接続数の合計は
+インスタンス数 × `DB_MAX_OPEN_CONNS` になります。DB 側の `max_connections`
+を超えないよう調整してください。
 
 ### コンテナの操作
 

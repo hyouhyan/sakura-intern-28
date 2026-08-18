@@ -15,4 +15,10 @@
 
 ### DDL
 
-[`../migrations/001_init.sql`](../migrations/001_init.sql) を参照
+初期スキーマは [`../migrations/001_init.sql`](../migrations/001_init.sql) を参照。
+
+以降の変更は連番のファイルで追加する。
+
+| ファイル | 内容 |
+|---|---|
+| [`002_repost_unique.sql`](../migrations/002_repost_unique.sql) | `posts` に `(user_id, original_post_id)` の一意制約を追加し、リポストの重複行を防ぐ |
