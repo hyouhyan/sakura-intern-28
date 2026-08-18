@@ -16,7 +16,6 @@ permissions:
   contents: read
 
 env:
-  REGISTRY_HOST: ${{ secrets.REGISTRY_SUBDOMAIN }}.sakuracr.jp
   IMAGE_NAME: intern2026-app-backend
 
 jobs:
@@ -26,6 +25,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # REGISTRY_SUBDOMAIN シークレットに前後の空白・改行が混じっていても
+      # ホスト名として不正にならないよう、ここでトリムしてから使う。
+      - name: Compute registry host
+        env:
+          REGISTRY_SUBDOMAIN: ${{ secrets.REGISTRY_SUBDOMAIN }}
+        run: |
+          subdomain="$(printf '%s' "$REGISTRY_SUBDOMAIN" | tr -d '[:space:]')"
+          echo "REGISTRY_HOST=${subdomain}.sakuracr.jp" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
