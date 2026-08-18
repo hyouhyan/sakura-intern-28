@@ -51,6 +51,22 @@ variable "server_ssh_public_key_path" {
 }
 
 ########################################
+# クラスタ
+########################################
+
+variable "cluster_name" {
+  description = "作成するクラスタの名前"
+  type        = string
+  default     = "sakuravel-cluster"
+}
+
+variable "cluster_lets_encrypt_email" {
+  description = "クラスタの Let's Encrypt 証明書を取得する際に使用するメールアドレス"
+  type        = string
+  default     = "hyouhyan@hyouhyan.com"
+}
+
+########################################
 # データベースアプライアンス
 ########################################
 
