@@ -94,14 +94,31 @@ variable "db_private_net_allow_cidr" {
 # コンテナレジストリ
 ########################################
 
+
 variable "registry_ci_user_password" {
   description = "GitHub Actions push用アカウントのパスワード"
-  type = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
 
 variable "registry_apprun_user_password" {
   description = "AppRun pull用アカウントのパスワード"
-  type = string
-  sensitive = true
+  type        = string
+  sensitive   = true
 }
+
+variable "registry_apprun_user_name" {
+  description = "AppRun pull用アカウント名"
+  type        = string
+  default     = "apprun"
+}
+
+variable "sakuravel_backend_image_name" {
+  description = "イメージ名"
+  type        = string
+  default     = "intern2026-app-backend:latest"
+}
+
+
+
+

@@ -1,6 +1,5 @@
 ########################################
-# サーバー
-########################################
+# サーバー #######################################
 
 # data "sakura_archive" "ubuntu" {
 #   name = "Ubuntu Server 24.04.2 LTS 64bit (cloudimg)"
@@ -39,10 +38,6 @@
 #   value = sakura_server.docker_host.ip_address
 # }
 
-//zone定義
-data "sakura_zone" "tk1a" {
-  name = "tk1a"
-}
 
 # resource "sakura_iam_project" "foobar" {
 #   name        = "foobar"
@@ -76,11 +71,16 @@ resource "sakura_apprun_dedicated_cluster" "main" {
 
 
 //apprun占有型
-resource "sakura_apprun_dedicated_application" "main" {
-  cluster_id = sakura_apprun_dedicated_cluster.main.id
-  name       = "SakuravelApp"
+resource "sakura_apprun_dedicated_application" "backend" {
+  cluster_id     = sakura_apprun_dedicated_cluster.main.id
+  name           = "SakuravelBackend"
+  active_version = 1
 }
 
+resource "sakura_apprun_dedicated_application" "frontend" {
+  cluster_id = sakura_apprun_dedicated_cluster.main.id
+  name       = "SakuravelFrontend"
+}
 
 resource "sakura_internet" "main" {
   name = "SarkuravelInternet"
@@ -98,8 +98,8 @@ data "sakura_apprun_dedicated_worker_service_classes" "main" {}
 resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
   cluster_id                = sakura_apprun_dedicated_cluster.main.id
   name                      = "SakuravelASG"
-  zone                      = data.sakura_zone.tk1a.name
-  worker_service_class_path = data.sakura_apprun_dedicated_worker_service_classes.main.classes[0].path
+  zone                      = var.zone
+  worker_service_class_path = data.sakura_apprun_dedicated_worker_service_classes.main.classes[3].path
   # name_servers              = local.sakura_dns
   min_nodes = 1
   max_nodes = 1
@@ -107,7 +107,7 @@ resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
   interfaces = [{
     interface_index = 0
     upstream        = sakura_internet.main.vswitch_id
-    connects_to_lb  = false
+    connects_to_lb  = true
     netmask         = sakura_internet.main.netmask
     default_gateway = sakura_internet.main.gateway
     ip_pool = [{
@@ -117,14 +117,19 @@ resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
   }]
 }
 
-//app run 占有型version
-resource "sakura_apprun_dedicated_version" "main" {
-  application_id = sakura_apprun_dedicated_application.main.id
-  cpu            = 1000
-  memory         = 512
-  image          = "nginx:latest"
-  cmd            = ["/bin/sh"]
-  scaling_mode   = "manual"
-  fixed_scale    = 1
+//app run
+resource "sakura_apprun_dedicated_version" "backend" {
+  application_id    = sakura_apprun_dedicated_application.backend.id
+  cpu               = 1000
+  memory            = 512
+  image             = "${sakura_container_registry.intern.fqdn}/${var.sakuravel_backend_image_name}"
+  registry_username = var.registry_apprun_user_name
+  registry_password = var.registry_apprun_user_password
+  scaling_mode      = "manual"
+  fixed_scale       = 1
+  env_vars = [{
+    key    = "DATABASE_URL"
+    value  = "sakuravel:password@tcp(db:3306)/sakuravel?parseTime=true&charset=utf8mb4"
+    secret = true
+  }]
 }
-
