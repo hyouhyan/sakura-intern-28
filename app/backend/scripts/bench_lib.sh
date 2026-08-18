@@ -18,18 +18,24 @@ DB_PASS=password
 DB_NAME=sakuravel
 DB_ROOT_PASS=password
 
-# sakuravelユーザーはUnixソケット経由(=localhost扱い)だと権限マッチングで
+# sakuravelユーザーは(ソケット経由=localhost扱いでの)権限マッチングで
 # 弾かれることがある（mysqladmin pingは通るがmysqlコマンド本体の接続は
-# 拒否される、という既知のハマりどころ）。復元・管理系操作は確実に全権限を
-# 持つrootをTCP接続(-h127.0.0.1)で使う。
+# 拒否される、という既知のハマりどころ）。ソケット接続自体はmysqladmin ping
+# で疎通確認済みなので、-hは付けずデフォルトのソケット接続のままrootを使う
+# （TCP接続 -h127.0.0.1 はこの環境で接続確立に失敗したため使わない）。
 mysql_root() {
   docker compose -f "$COMPOSE_FILE" exec -T db \
     mysql -u root -p"$DB_ROOT_PASS" "$@"
 }
 
-SERIAL_N=100
-CONCURRENT_N=200
-CONCURRENT_C=10
+# 17-experiment(改善前)はN+1クエリ + MaxOpenConns=1で1リクエストが
+# 非常に重い（following等でscale=5データに対し数百クエリ/リクエスト）ため、
+# デフォルトのサンプル数は小さめにしてある。統計的な精度よりもbefore/after
+# を現実的な時間で比較できることを優先。より厳密に測りたい場合は実行時に
+# SERIAL_N=100 CONCURRENT_N=200 のように上書きできる。
+SERIAL_N="${SERIAL_N:-20}"
+CONCURRENT_N="${CONCURRENT_N:-30}"
+CONCURRENT_C="${CONCURRENT_C:-10}"
 FOOTPRINT_VISITORS=30
 
 BENCH_USER_ID=""
@@ -206,8 +212,8 @@ run_all_endpoints() {
     [[ "$need_auth" == "1" ]] && extra=("${auth[@]}")
     log "計測中: $label"
     local serial concurrent queries
-    serial="$("$BACKEND_DIR/bench.sh" "$url" "${extra[@]}")"
-    concurrent="$("$BACKEND_DIR/bench_concurrent.sh" "$url" "${extra[@]}")"
+    serial="$(N="$SERIAL_N" "$BACKEND_DIR/bench.sh" "$url" "${extra[@]}")"
+    concurrent="$(N="$CONCURRENT_N" C="$CONCURRENT_C" "$BACKEND_DIR/bench_concurrent.sh" "$url" "${extra[@]}")"
     queries="$(count_queries "$url" "${extra[@]}")"
     write_memo_row "$label" "$serial" "$concurrent" "$queries"
   done
@@ -218,8 +224,8 @@ run_all_endpoints() {
   local rec_url="${BASE_URL}/posts?feed=recommended&per_page=50"
   local first serial concurrent queries
   first="$(curl -s -o /dev/null -w '%{time_total}' "$rec_url" "${auth[@]}")"
-  serial="$("$BACKEND_DIR/bench.sh" "$rec_url" "${auth[@]}")"
-  concurrent="$("$BACKEND_DIR/bench_concurrent.sh" "$rec_url" "${auth[@]}")"
+  serial="$(N="$SERIAL_N" "$BACKEND_DIR/bench.sh" "$rec_url" "${auth[@]}")"
+  concurrent="$(N="$CONCURRENT_N" C="$CONCURRENT_C" "$BACKEND_DIR/bench_concurrent.sh" "$rec_url" "${auth[@]}")"
   queries="$(count_queries "$rec_url" "${auth[@]}")"
   write_memo_row "GET /posts?feed=recommended（初回=${first}s）" "$serial" "$concurrent" "$queries"
 

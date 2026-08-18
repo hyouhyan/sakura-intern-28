@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # bench_concurrent.sh <URL> [追加のcurlオプション...]
+# 環境変数 N / C でリクエスト数・同時実行数を上書き可能（デフォルト200/10）。
 url="$1"; shift
-n=200      # 総リクエスト数
-c=10       # 同時実行数
+n="${N:-200}"      # 総リクエスト数
+c="${C:-10}"       # 同時実行数
 start=$(date +%s.%N)
 seq 1 "$n" | xargs -P "$c" -I{} \
   curl -s -o /dev/null -w '%{http_code} %{time_total}\n' "$url" "$@" \
