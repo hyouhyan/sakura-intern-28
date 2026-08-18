@@ -60,6 +60,7 @@ func main() {
 	fanoutCtx, stopFanout := context.WithCancel(context.Background())
 	defer stopFanout()
 	go h.RunNotificationFanout(fanoutCtx, fanoutInterval())
+	go h.RunThreadFanout(fanoutCtx, fanoutInterval())
 
 	go func() {
 		log.Printf("starting server on :%s", port)
