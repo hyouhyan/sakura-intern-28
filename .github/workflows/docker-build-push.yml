@@ -1,0 +1,47 @@
+name: Docker Build & Push
+
+# main へのマージ/push を契機に backend のコンテナイメージをビルドし、
+# さくらのコンテナレジストリへ push する。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/backend/**"
+      - ".github/workflows/docker-build-push.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY_HOST: ${{ secrets.REGISTRY_SUBDOMAIN }}.sakuracr.jp
+  IMAGE_NAME: intern2026-app-backend
+
+jobs:
+  build-and-push:
+    name: Build & Push backend image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Sakura Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ci
+          password: ${{ secrets.REGISTRY_CI_USER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: app/backend
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

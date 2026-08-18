@@ -49,3 +49,5 @@ terraform output -raw secret_key
 | `TFSTATE_SECRET_ACCESS_KEY` | state 保存用オブジェクトストレージのシークレットキー (bootstrap の出力) |
 | `TF_VAR_DB_PASSWORD` | データベースパスワード |
 | `TF_VAR_SERVER_PASSWORD` | サーバー初期パスワード |
+| `REGISTRY_SUBDOMAIN` | さくらのコンテナレジストリのサブドメイン (`<REGISTRY_SUBDOMAIN>.sakuracr.jp`)。`.github/workflows/docker-build-push.yml` で使用 |
+| `REGISTRY_CI_USER_PASSWORD` | コンテナレジストリの CI 用ユーザー (`ci`) のパスワード |
