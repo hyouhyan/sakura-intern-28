@@ -123,6 +123,109 @@ variable "lb_name" {
 }
 
 ########################################
+# nginx アプリケーション
+########################################
+
+variable "nginx_app_name" {
+  description = "nginx アプリケーションの名前 (英数字とハイフン・アンダースコアのみ)"
+  type        = string
+  default     = "nginx-demo"
+}
+
+variable "nginx_replicas" {
+  description = <<-EOT
+    起動する nginx コンテナの数。LB はこの台数に振り分ける。
+    AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てるため、
+    この値は asg_max_nodes 以下である必要がある。
+  EOT
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.nginx_replicas <= var.asg_max_nodes
+    error_message = "nginx_replicas は asg_max_nodes 以下にしてください。AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てます。"
+  }
+}
+
+variable "nginx_image" {
+  description = <<-EOT
+    nginx のコンテナイメージ。
+    AppRun 専有型は非 root でコンテナを実行するため、root 前提の
+    nginx:latest や nginxdemos/hello は port 80 に bind できず起動に失敗する。
+    非 root 向けにビルドされた nginx-unprivileged を使うこと。
+  EOT
+  type        = string
+  default     = "nginxinc/nginx-unprivileged:stable-alpine"
+}
+
+variable "nginx_container_port" {
+  description = <<-EOT
+    コンテナが listen するポート。
+    AppRun 専有型のコンテナは非 root 実行なので特権ポート (80 番) には
+    bind できない。8080 などの非特権ポートを使うこと。
+  EOT
+  type        = number
+  default     = 8080
+}
+
+variable "nginx_active_version" {
+  description = <<-EOT
+    有効化する nginx アプリのバージョン番号。
+
+    provider の application リソースは Create 時に active_version を送らず、
+    API が返す null で state を上書きする。そのため application を新規作成する
+    apply でこの値を指定すると "Provider produced inconsistent result after
+    apply" で失敗する。有効化は Update 経由でしか行えない。
+
+    したがって以下の場合は 2 段階で apply する:
+      - application を新規作成するとき
+      - version を作り直すとき (アクティブな version は削除できない)
+
+      1 回目: terraform apply -var-file=deactivate.tfvars
+      2 回目: terraform apply -var 'nginx_active_version=<terraform output nginx_version の値>'
+
+    -var では null を渡せない (文字列 "null" になり number に変換できず失敗する) ため、
+    無効化には deactivate.tfvars を使う。
+    構成を変えない通常時は default のままで apply すればよい。
+  EOT
+  type        = number
+  default     = 1
+}
+
+variable "nginx_hosts" {
+  description = <<-EOT
+    LB が nginx に振り分ける Host ヘッダの値 (FQDN)。
+    HTTP (80) では、ここで指定した FQDN に加えて LB の VIP も常に受け付ける
+    ため、IP 直打ちでの動作確認も引き続き可能。
+    nginx_enable_tls を有効にする場合は必ず指定すること。
+    DNS の A レコード (FQDN -> LB の VIP) は手動で登録する前提。
+  EOT
+  type        = list(string)
+  default     = null
+}
+
+variable "nginx_enable_tls" {
+  description = <<-EOT
+    Let's Encrypt による TLS 終端 (lb_port 443) を有効にする。
+
+    前提:
+      - nginx_hosts に FQDN を指定していること
+        (LE は IP アドレスに証明書を発行できない)
+      - その FQDN の A レコードが LB の VIP を指していること
+      - CDN のプロキシを経由していないこと
+        (LE の HTTP-01 チャレンジが 80 番に到達する必要がある)
+      - cluster.tf の ports に 80/http と 443/https があること
+  EOT
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = !var.nginx_enable_tls || try(length(var.nginx_hosts) > 0, false)
+    error_message = "nginx_enable_tls を有効にする場合は nginx_hosts に FQDN を指定してください。Let's Encrypt は IP アドレスに証明書を発行できません。"
+  }
+}
+
+########################################
 # ワーカーノード数
 ########################################
 
