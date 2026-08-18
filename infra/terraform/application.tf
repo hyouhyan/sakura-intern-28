@@ -50,6 +50,7 @@ locals {
       echo '  scgi_temp_path /tmp/nginx-scgi;'
       echo '  server {'
       echo '    listen ${var.nginx_container_port};'
+      echo '    listen ${var.nginx_tls_container_port};'
       echo '    location / {'
       echo '      default_type text/plain;'
       echo '      return 200 "backend: $server_addr host=$hostname";'
@@ -100,8 +101,10 @@ resource "sakura_apprun_dedicated_version" "nginx" {
     }],
 
     # TLS 終端。LE は IP アドレスに証明書を発行できないので FQDN のみを対象にする。
+    # AppRun は exposed_ports 間で target_port の重複を許さない
+    # (400 "Target port is duplicated")。そのため HTTPS 側は別ポートに向ける。
     var.nginx_enable_tls ? [{
-      target_port      = var.nginx_container_port
+      target_port      = var.nginx_tls_container_port
       lb_port          = 443
       host             = local.nginx_fqdns
       use_lets_encrypt = true

@@ -168,6 +168,23 @@ variable "nginx_container_port" {
   default     = 8080
 }
 
+variable "nginx_tls_container_port" {
+  description = <<-EOT
+    HTTPS (lb_port 443) の転送先となるコンテナのポート。
+
+    AppRun は exposed_ports 間で target_port が重複するとエラーになるため
+    (400 "Target port is duplicated")、HTTP 用とは別のポートにする必要がある。
+    nginx 側は同一 server ブロックで両方を listen する。
+  EOT
+  type        = number
+  default     = 8081
+
+  validation {
+    condition     = var.nginx_tls_container_port != var.nginx_container_port
+    error_message = "nginx_tls_container_port は nginx_container_port と別の値にしてください。AppRun は target_port の重複を許しません。"
+  }
+}
+
 variable "nginx_active_version" {
   description = <<-EOT
     有効化する nginx アプリのバージョン番号。
