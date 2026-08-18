@@ -7,22 +7,22 @@
 ########################################
 
 resource "sakura_monitoring_suite_log_storage" "apprun_logs" {
-  name = "intern2026-apprun-logs"
+  name        = "intern2026-apprun-logs"
   description = "AppRun 専有型のログ保存先"
 }
 
 resource "sakura_monitoring_suite_log_storage" "database_logs" {
-  name = "intern2026-database-logs"
+  name        = "intern2026-database-logs"
   description = "データベースログ保存先"
 }
 
 resource "sakura_monitoring_suite_metric_storage" "apprun_metrics" {
-  name = "intern2026-apprun-metrics"
+  name        = "intern2026-apprun-metrics"
   description = "AppRun 専有型のメトリクス保存先"
 }
 
 resource "sakura_monitoring_suite_metric_storage" "database_metrics" {
-  name = "intern2026-database-metrics"
+  name        = "intern2026-database-metrics"
   description = "データベースメトリクス保存先"
 }
 
