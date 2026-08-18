@@ -111,3 +111,14 @@ variable "db_private_net_allow_cidr" {
   type        = string
   default     = "192.168.1.0/24"
 }
+
+########################################
+# ロードバランサ
+########################################
+
+variable "lb_name" {
+  description = "AppRun 専有型ロードバランサの名前"
+  type        = string
+  default     = "SakuravelLB"
+}
+
