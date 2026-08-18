@@ -122,3 +122,18 @@ variable "lb_name" {
   default     = "SakuravelLB"
 }
 
+########################################
+# ワーカーノード数
+########################################
+
+variable "asg_min_nodes" {
+  description = "オートスケーリンググループの最小ノード数"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_nodes" {
+  description = "オートスケーリンググループの最大ノード数。nginx_replicas 以上にする"
+  type        = number
+  default     = 1
+}
