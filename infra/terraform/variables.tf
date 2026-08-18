@@ -144,7 +144,7 @@ variable "nginx_replicas" {
     この値は asg_max_nodes 以下である必要がある。
   EOT
   type        = number
-  default     = 1
+  default     = 3
 
   validation {
     condition     = var.nginx_replicas <= var.asg_max_nodes
@@ -260,5 +260,5 @@ variable "asg_min_nodes" {
 variable "asg_max_nodes" {
   description = "オートスケーリンググループの最大ノード数。nginx_replicas 以上にする"
   type        = number
-  default     = 1
+  default     = 3
 }
