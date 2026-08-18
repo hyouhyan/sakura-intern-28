@@ -66,6 +66,10 @@ func (h *Handler) streamEvents(w http.ResponseWriter, r *http.Request, ch <-chan
 			flusher.Flush()
 		case <-r.Context().Done():
 			return
+		case <-h.Shutdown:
+			// プロセス終了。接続を閉じるとブラウザの EventSource が
+			// 自動で再接続し、生き残っているインスタンスに繋ぎ直す。
+			return
 		}
 	}
 }

@@ -18,6 +18,8 @@ type Handler struct {
 	// Notifications はユーザーIDごと、Threads はスレッドのルート投稿IDごとの SSE 購読を管理する。
 	Notifications *realtime.Hub
 	Threads       *realtime.Hub
+	// Shutdown はプロセス終了時に閉じられる。SSE の配信ループはこれを見て戻る。
+	Shutdown <-chan struct{}
 }
 
 func (h *Handler) respondJSON(w http.ResponseWriter, status int, v any) {

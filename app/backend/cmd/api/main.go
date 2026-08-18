@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	appdb "sakuravel/internal/db"
 	"sakuravel/internal/handler"
@@ -11,15 +16,25 @@ import (
 	"sakuravel/internal/realtime"
 )
 
+// shutdownTimeout は終了signalを受けてから処理中のリクエストを待つ上限。
+// AppRun のようにコンテナが入れ替わる環境では、この時間で片付かなければ
+// どのみち強制終了されるため、長く取りすぎても意味がない。
+const shutdownTimeout = 15 * time.Second
+
 func main() {
 	db := appdb.New()
 	defer db.Close()
+
+	// SSE の配信ループへ終了を伝えるチャネル。閉じると各ストリームが順に戻る。
+	// これが無いと、終わることのない SSE 接続を Shutdown が待ち続けてしまう。
+	shutdown := make(chan struct{})
 
 	h := &handler.Handler{
 		DB:            db,
 		CookieSecure:  os.Getenv("COOKIE_SECURE") == "true",
 		Notifications: realtime.NewHub(),
 		Threads:       realtime.NewHub(),
+		Shutdown:      shutdown,
 	}
 	auth := &middleware.Auth{DB: db}
 
@@ -32,8 +47,32 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("starting server on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+
+	srv := &http.Server{Addr: ":" + port, Handler: mux}
+
+	go func() {
+		log.Printf("starting server on :%s", port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	// コンテナの入れ替え時には SIGTERM が送られる。受け取ったら新規の受付を
+	// 止め、処理中のリクエストが終わるのを待ってから落ちる。
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+	stop() // 2度目のsignalは既定動作（即時終了）に戻す
+
+	log.Println("shutting down...")
+	close(shutdown)
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+	log.Println("stopped")
 }
 
 func routes(h *handler.Handler, auth *middleware.Auth) http.Handler {
