@@ -1,0 +1,63 @@
+name: Terraform Apply
+
+# main へのマージ/push を契機に infra/terraform を適用する。
+# terraform apply はこのワークフロー経由でのみ実行し、ローカルからは実行しない。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform-apply.yml"
+
+# さくらのオブジェクトストレージは state ロックに対応していないため、
+# concurrency で apply の同時実行を防ぐ (待機させ、キャンセルはしない)。
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: infra/terraform
+
+env:
+  # さくらのクラウド API 認証 (provider が直接参照する環境変数名)
+  SAKURA_ACCESS_TOKEN: ${{ secrets.SAKURA_ACCESS_TOKEN }}
+  SAKURA_ACCESS_TOKEN_SECRET: ${{ secrets.SAKURA_ACCESS_TOKEN_SECRET }}
+  # state 保存用オブジェクトストレージ (S3 互換 API) 認証
+  AWS_ACCESS_KEY_ID: ${{ secrets.TFSTATE_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.TFSTATE_SECRET_ACCESS_KEY }}
+  # Terraform 変数 (sensitive)
+  TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
+  TF_VAR_server_password: ${{ secrets.TF_VAR_SERVER_PASSWORD }}
+
+jobs:
+  terraform:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "latest"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve tfplan
