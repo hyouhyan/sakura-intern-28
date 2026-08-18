@@ -24,7 +24,7 @@ DB_ROOT_PASS=password
 # 持つrootをTCP接続(-h127.0.0.1)で使う。
 mysql_root() {
   docker compose -f "$COMPOSE_FILE" exec -T db \
-    mysql -h 127.0.0.1 -u root -p"$DB_ROOT_PASS" "$@"
+    mysql -u root -p"$DB_ROOT_PASS" "$@"
 }
 
 SERIAL_N=100
