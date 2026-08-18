@@ -66,6 +66,12 @@ variable "cluster_lets_encrypt_email" {
   default     = "hyouhyan@hyouhyan.com"
 }
 
+variable "service_principal_id" {
+  description = "クラスタのサービスプリンシパル ID"
+  type        = string
+  default     = ""
+}
+
 ########################################
 # データベースアプライアンス
 ########################################
