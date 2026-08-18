@@ -89,3 +89,19 @@ variable "db_private_net_allow_cidr" {
   type        = string
   default     = "192.168.1.0/24"
 }
+
+########################################
+# コンテナレジストリ
+########################################
+
+variable "registry_ci_user_password" {
+  description = "GitHub Actions push用アカウントのパスワード"
+  type = string
+  sensitive = true
+}
+
+variable "registry_apprun_user_password" {
+  description = "AppRun pull用アカウントのパスワード"
+  type = string
+  sensitive = true
+}

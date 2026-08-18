@@ -1,35 +1,25 @@
-variable users {
-	type = list(object({
-		name = string
-		password = string
-		permission = string
-	}))
-	default = [
+locals {
+	registry_users = [
 		{
-			name = "ci"
-			password = CI_PASSWORD
-			permission = "all"
+			name                = "ci"
+			password_wo         = var.registry_ci_user_password
+			password_wo_version = 1
+			permission          = "all"
 		},
 		{
-			name = "apprun"
-			password = registry_apprun_user_password
-			permission = "pull"
+			name                = "apprun"
+			password_wo         = var.registry_apprun_user_password
+			password_wo_version = 1
+			permission          = "readonly"
 		}
 	]
 }
 
 resource "sakura_container_registry" "intern" {
 	name = "intern"
-	subdomain_label = "?"
+	subdomain_label = "intern"
 
 	description = "AppRun用のコンテナレジストリ"
-	
-	dynamic user{
-		for_each = var.users
-		content {
-			name = user.value.name
-			password = user.value.password
-			permission = user.value.permission
-		}
-	}
+
+	user = local.registry_users
 }
