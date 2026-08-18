@@ -8,6 +8,16 @@ cp secret.auto.tfvars.example secret.auto.tfvars
 
 クレデンシャルなどは1Passwordに入ってます。
 
+`terraform init` に必要な state 保存用オブジェクトストレージの認証情報 (`access_key` /
+`secret_key`) も同様にファイルで供給します (`backend` ブロックは変数を参照できないため、
+tfvars ではなく `-backend-config` 用のファイルに分離しています)：
+
+```
+cp backend.hcl.example backend.hcl
+# access_key / secret_key を編集 (値は bootstrap の出力、下記参照)
+terraform init -backend-config=backend.hcl
+```
+
 ## Terraform apply について
 
 `infra/terraform` の `terraform apply` は GitHub Actions

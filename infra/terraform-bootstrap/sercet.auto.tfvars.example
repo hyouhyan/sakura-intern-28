@@ -1,0 +1,5 @@
+# さくらのクラウド API トークン
+sakura_access_token = ""
+
+# さくらのクラウド API トークンシークレット
+sakura_access_token_secret = ""
