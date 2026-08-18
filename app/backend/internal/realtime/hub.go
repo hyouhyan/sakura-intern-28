@@ -49,6 +49,24 @@ func (h *Hub) Subscribe(key int64) (<-chan Event, func()) {
 	return ch, unsubscribe
 }
 
+// Keys は現在1人以上の購読者がいる key の一覧を返す。
+// DB を確認する対象を、このインスタンスに繋がっている分だけに絞るために使う。
+func (h *Hub) Keys() []int64 {
+	if h == nil {
+		return nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// 購読者が0になった key は Subscribe の解除時に削除されるため、
+	// ここに残っている key には必ず購読者がいる。
+	keys := make([]int64, 0, len(h.subs))
+	for k := range h.subs {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // Publish は key を購読している全員にイベントを送る。購読者がいなければ何もしない。
 func (h *Hub) Publish(key int64, ev Event) {
 	if h == nil {

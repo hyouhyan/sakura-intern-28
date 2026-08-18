@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,6 +21,10 @@ import (
 // AppRun のようにコンテナが入れ替わる環境では、この時間で片付かなければ
 // どのみち強制終了されるため、長く取りすぎても意味がない。
 const shutdownTimeout = 15 * time.Second
+
+// defaultFanoutInterval は SSE 配信のために DB を確認する既定の間隔。
+// FANOUT_INTERVAL_MS で変更できる。
+const defaultFanoutInterval = time.Second
 
 func main() {
 	db := appdb.New()
@@ -50,6 +55,12 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + port, Handler: mux}
 
+	// 複数インスタンス構成では、通知を作ったインスタンスと購読者が繋がって
+	// いるインスタンスが一致しない。DB を経由して自分の購読者に配信する。
+	fanoutCtx, stopFanout := context.WithCancel(context.Background())
+	defer stopFanout()
+	go h.RunNotificationFanout(fanoutCtx, fanoutInterval())
+
 	go func() {
 		log.Printf("starting server on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -65,6 +76,7 @@ func main() {
 	stop() // 2度目のsignalは既定動作（即時終了）に戻す
 
 	log.Println("shutting down...")
+	stopFanout()
 	close(shutdown)
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -73,6 +85,16 @@ func main() {
 		log.Printf("graceful shutdown failed: %v", err)
 	}
 	log.Println("stopped")
+}
+
+// fanoutInterval は SSE 配信のために DB を確認する間隔。
+// 短くするほど通知は速くなるが、その分 DB への問い合わせが増える。
+func fanoutInterval() time.Duration {
+	ms, err := strconv.Atoi(os.Getenv("FANOUT_INTERVAL_MS"))
+	if err != nil || ms < 1 {
+		return defaultFanoutInterval
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 func routes(h *handler.Handler, auth *middleware.Auth) http.Handler {
