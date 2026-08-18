@@ -18,13 +18,14 @@ DB_PASS=password
 DB_NAME=sakuravel
 DB_ROOT_PASS=password
 
-# sakuravelユーザーはUnixソケット経由(=localhost扱い)だと権限マッチングで
+# sakuravelユーザーは(ソケット経由=localhost扱いでの)権限マッチングで
 # 弾かれることがある（mysqladmin pingは通るがmysqlコマンド本体の接続は
-# 拒否される、という既知のハマりどころ）。復元・管理系操作は確実に全権限を
-# 持つrootをTCP接続(-h127.0.0.1)で使う。
+# 拒否される、という既知のハマりどころ）。ソケット接続自体はmysqladmin ping
+# で疎通確認済みなので、-hは付けずデフォルトのソケット接続のままrootを使う
+# （TCP接続 -h127.0.0.1 はこの環境で接続確立に失敗したため使わない）。
 mysql_root() {
   docker compose -f "$COMPOSE_FILE" exec -T db \
-    mysql -h 127.0.0.1 -u root -p"$DB_ROOT_PASS" "$@"
+    mysql -u root -p"$DB_ROOT_PASS" "$@"
 }
 
 SERIAL_N=100
