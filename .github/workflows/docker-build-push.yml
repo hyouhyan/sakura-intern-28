@@ -33,6 +33,8 @@ jobs:
           REGISTRY_SUBDOMAIN: ${{ secrets.REGISTRY_SUBDOMAIN }}
         run: |
           subdomain="$(printf '%s' "$REGISTRY_SUBDOMAIN" | tr -d '[:space:]')"
+          # 値が既に FQDN (xxx.sakuracr.jp) で渡された場合にも対応する
+          subdomain="${subdomain%.sakuracr.jp}"
           echo "REGISTRY_HOST=${subdomain}.sakuracr.jp" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
