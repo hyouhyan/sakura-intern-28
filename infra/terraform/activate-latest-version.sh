@@ -11,6 +11,23 @@
 
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/../.." && pwd)"
+token_override="${SAKURA_ACCESS_TOKEN+x}"
+token_value="${SAKURA_ACCESS_TOKEN-}"
+secret_override="${SAKURA_ACCESS_TOKEN_SECRET+x}"
+secret_value="${SAKURA_ACCESS_TOKEN_SECRET-}"
+
+if [[ -f "${repo_root}/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "${repo_root}/.env"
+  set +a
+fi
+
+[[ "${token_override}" != x ]] || export SAKURA_ACCESS_TOKEN="${token_value}"
+[[ "${secret_override}" != x ]] || export SAKURA_ACCESS_TOKEN_SECRET="${secret_value}"
+
 usage() {
   cat <<'EOF'
 Usage:

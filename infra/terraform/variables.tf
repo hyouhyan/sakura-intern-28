@@ -196,6 +196,7 @@ variable "frontend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "backend_host" {
@@ -208,6 +209,7 @@ variable "backend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "enable_tls" {
@@ -241,38 +243,6 @@ variable "enable_tls" {
 }
 
 ########################################
-# アプリケーションの有効バージョン
-########################################
-#
-# provider の application リソースは Create 時に active_version を送らず、
-# API が返す null で state を上書きする。そのため application を新規作成する
-# apply でこの値を指定すると "Provider produced inconsistent result after
-# apply" で失敗する。有効化は Update 経由でしか行えない。
-#
-# したがって以下の場合は 2 段階で apply する (redeploy.sh がやってくれる):
-#   - application を新規作成するとき
-#   - version を作り直すとき (アクティブな version は削除できない)
-#
-#     1 回目: terraform apply -var-file=deactivate.tfvars
-#     2 回目: terraform apply -var 'backend_active_version=<terraform output backend_version の値>' ...
-#
-# -var では null を渡せない (文字列 "null" になり number に変換できず失敗する) ため、
-# 無効化には deactivate.tfvars を使う。
-# 構成を変えない通常時は default のままで apply すればよい。
-
-variable "backend_active_version" {
-  description = "有効化する backend アプリのバージョン番号"
-  type        = number
-  default     = 1
-}
-
-variable "frontend_active_version" {
-  description = "有効化する frontend アプリのバージョン番号"
-  type        = number
-  default     = 1
-}
-
-########################################
 # ワーカーノード数
 ########################################
 
@@ -296,7 +266,7 @@ variable "asg_max_nodes" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名"
   type        = string
-  default     = "intern1313"
+  default     = "intern131313"
 }
 
 variable "registry_subdomain_label" {
@@ -308,7 +278,7 @@ variable "registry_subdomain_label" {
     既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
   EOT
   type        = string
-  default     = "intern1313"
+  default     = "intern131313"
 }
 
 variable "registry_ci_user_password" {
@@ -333,5 +303,3 @@ variable "sakuravel_backend_image_name" {
   description = "デプロイするBackendイメージ名。TF_VAR_sakuravel_backend_image_nameで指定し、Frontendも同じtagを使用する。"
   type        = string
 }
-
-
