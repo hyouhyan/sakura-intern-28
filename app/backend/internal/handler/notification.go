@@ -21,7 +21,7 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 	listArgs := append([]any{myID}, typeArgs...)
 	listArgs = append(listArgs, perPage, offset)
 	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id, type, actor_id, post_id, is_read, created_at
+		SELECT id, type, actor_id, post_id, is_read, created_at, COUNT(*) OVER() AS total
 		FROM notifications
 		WHERE user_id = ?`+typeCond+`
 		ORDER BY created_at DESC, id DESC
@@ -41,36 +41,97 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		isRead  bool
 	}
 	var rawNotifs []notifRow
+	var total int
 	for rows.Next() {
 		var n notifRow
 		var createdAt any
-		rows.Scan(&n.id, &n.ntype, &n.actorID, &n.postID, &n.isRead, &createdAt)
+		rows.Scan(&n.id, &n.ntype, &n.actorID, &n.postID, &n.isRead, &createdAt, &total)
 		rawNotifs = append(rawNotifs, n)
+	}
+	rows.Close()
+
+	// ウィンドウ関数は返ってきた行に対して総件数を付与するため、OFFSET が
+	// ページ末尾を超えて0件になるケースだけフォールバックで COUNT(*) する。
+	if len(rawNotifs) == 0 && offset > 0 {
+		h.DB.QueryRowContext(r.Context(),
+			`SELECT COUNT(*) FROM notifications WHERE user_id = ?`+typeCond,
+			append([]any{myID}, typeArgs...)...,
+		).Scan(&total)
+	}
+
+	actorIDs := make([]int64, 0, len(rawNotifs))
+	postIDs := make([]int64, 0, len(rawNotifs))
+	for _, rn := range rawNotifs {
+		actorIDs = append(actorIDs, rn.actorID)
+		if rn.postID != nil {
+			postIDs = append(postIDs, *rn.postID)
+		}
+	}
+
+	actorsByID, err := h.fetchUsersBatch(r, actorIDs)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+
+	// 対象投稿の本文の抜粋を付ける。
+	// 返信通知の post_id は返信そのものを指すので、返信先の抜粋も添える。
+	type postInfo struct {
+		content  *string
+		parentID *int64
+	}
+	postInfoByID := make(map[int64]postInfo, len(postIDs))
+	if len(postIDs) > 0 {
+		placeholders, args := int64InClause(dedupeInt64(postIDs))
+		if rows, err := h.DB.QueryContext(r.Context(),
+			`SELECT id, content, parent_post_id FROM posts WHERE id IN (`+placeholders+`)`, args...,
+		); err == nil {
+			for rows.Next() {
+				var id int64
+				var info postInfo
+				rows.Scan(&id, &info.content, &info.parentID)
+				postInfoByID[id] = info
+			}
+			rows.Close()
+		}
+	}
+
+	var parentIDs []int64
+	for _, info := range postInfoByID {
+		if info.parentID != nil {
+			parentIDs = append(parentIDs, *info.parentID)
+		}
+	}
+	parentContentByID := make(map[int64]*string, len(parentIDs))
+	if len(parentIDs) > 0 {
+		placeholders, args := int64InClause(dedupeInt64(parentIDs))
+		if rows, err := h.DB.QueryContext(r.Context(),
+			`SELECT id, content FROM posts WHERE id IN (`+placeholders+`)`, args...,
+		); err == nil {
+			for rows.Next() {
+				var id int64
+				var content *string
+				rows.Scan(&id, &content)
+				parentContentByID[id] = content
+			}
+			rows.Close()
+		}
 	}
 
 	notifs := make([]any, 0, len(rawNotifs))
 	for _, rn := range rawNotifs {
-		actor, err := h.fetchUser(r, rn.actorID)
-		if err != nil {
+		actor, ok := actorsByID[rn.actorID]
+		if !ok {
 			continue
 		}
 
-		// 対象投稿の本文の抜粋を付ける。
-		// 返信通知の post_id は返信そのものを指すので、返信先の抜粋も添える。
 		var excerpt, parentExcerpt *string
 		if rn.postID != nil {
-			var content *string
-			var parentID *int64
-			if err := h.DB.QueryRowContext(r.Context(),
-				`SELECT content, parent_post_id FROM posts WHERE id = ?`, *rn.postID,
-			).Scan(&content, &parentID); err == nil {
-				excerpt = excerptOf(content)
-				if parentID != nil {
-					var parentContent *string
-					if err := h.DB.QueryRowContext(r.Context(),
-						`SELECT content FROM posts WHERE id = ?`, *parentID,
-					).Scan(&parentContent); err == nil {
-						parentExcerpt = excerptOf(parentContent)
+			if info, ok := postInfoByID[*rn.postID]; ok {
+				excerpt = excerptOf(info.content)
+				if info.parentID != nil {
+					if content, ok := parentContentByID[*info.parentID]; ok {
+						parentExcerpt = excerptOf(content)
 					}
 				}
 			}
@@ -87,18 +148,13 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// unread_count は total（絞り込み後の件数）とは別のバッジ用の値なので、
+	// ページングとは独立して常に全種別で個別に取得する。
 	var unreadCount int
 	h.DB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = FALSE`,
 		myID,
 	).Scan(&unreadCount)
-
-	// total は絞り込み後の件数（ページングに使う）。unread_count はバッジ用なので全種別のまま。
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM notifications WHERE user_id = ?`+typeCond,
-		append([]any{myID}, typeArgs...)...,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"notifications": notifs,

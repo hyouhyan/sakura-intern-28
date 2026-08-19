@@ -20,6 +20,9 @@ crash.*.log
 # backend.hcl.example をコピーして使う (terraform init -backend-config=backend.hcl)。
 backend.hcl
 
+# 機密を含まず、運用手順上リポジトリに必要な tfvars は追跡する
+!terraform/deactivate.tfvars
+
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
 override.tf
@@ -39,3 +42,4 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+terraform/backend.hcl

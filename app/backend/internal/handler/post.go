@@ -11,81 +11,55 @@ func (h *Handler) GetTimeline(w http.ResponseWriter, r *http.Request) {
 	page, perPage, offset := h.pagination(r)
 	feed := r.URL.Query().Get("feed")
 
-	var rows *sql.Rows
+	var ids []int64
+	var total int
 	var err error
 
 	// 返信（parent_post_id あり）はスレッド画面でのみ表示するためタイムラインから除く
 	switch feed {
 	case "latest":
-		rows, err = h.DB.QueryContext(r.Context(), `
-			SELECT id, user_id, content, is_repost, original_post_id, created_at
-			FROM posts
-			WHERE parent_post_id IS NULL
-			ORDER BY created_at DESC, id DESC
-			LIMIT ? OFFSET ?
-		`, perPage, offset)
+		ids, total, err = h.queryIDsWithTotal(r,
+			`SELECT id, COUNT(*) OVER() AS total FROM posts
+			 WHERE parent_post_id IS NULL
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT ? OFFSET ?`,
+			[]any{perPage, offset}, offset,
+			`SELECT COUNT(*) FROM posts WHERE parent_post_id IS NULL`, nil,
+		)
 	case "recommended":
-		rows, err = h.DB.QueryContext(r.Context(), `
-			SELECT p.id, p.user_id, p.content, p.is_repost, p.original_post_id, p.created_at
-			FROM posts p
-			LEFT JOIN likes l ON l.post_id = p.id AND l.created_at > NOW() - INTERVAL 24 HOUR
-			WHERE p.parent_post_id IS NULL
-			GROUP BY p.id, p.user_id, p.content, p.is_repost, p.original_post_id, p.created_at
-			ORDER BY COUNT(l.post_id) DESC, p.created_at DESC, p.id DESC
-			LIMIT ? OFFSET ?
-		`, perPage, offset)
+		ids, total, err = h.recommendedTimelinePage(r, offset, perPage)
 	default: // "following"
-		rows, err = h.DB.QueryContext(r.Context(), `
-			SELECT id, user_id, content, is_repost, original_post_id, created_at
-			FROM posts
-			WHERE parent_post_id IS NULL
-			  AND user_id IN (
+		ids, total, err = h.queryIDsWithTotal(r,
+			`SELECT id, COUNT(*) OVER() AS total FROM posts
+			 WHERE parent_post_id IS NULL
+			   AND user_id IN (
 				SELECT followee_id FROM follows WHERE follower_id = ?
 			)
-			ORDER BY created_at DESC, id DESC
-			LIMIT ? OFFSET ?
-		`, myID, perPage, offset)
+			 ORDER BY created_at DESC, id DESC
+			 LIMIT ? OFFSET ?`,
+			[]any{myID, perPage, offset}, offset,
+			`SELECT COUNT(*) FROM posts
+			 WHERE parent_post_id IS NULL
+			   AND user_id IN (
+				SELECT followee_id FROM follows WHERE follower_id = ?
+			)`, []any{myID},
+		)
 	}
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "server error")
 		return
 	}
-	defer rows.Close()
 
-	type postRow struct {
-		id     int64
-		userID int64
+	postsByID, err := h.fetchPostsBatch(r, ids, myID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
-	var rawPosts []postRow
-	for rows.Next() {
-		var p postRow
-		var dummy any // content, is_repost, original_post_id, created_at
-		rows.Scan(&p.id, &p.userID, &dummy, &dummy, &dummy, &dummy)
-		rawPosts = append(rawPosts, p)
-	}
-
-	posts := make([]any, 0, len(rawPosts))
-	for _, rp := range rawPosts {
-		p, err := h.fetchPost(r, rp.id, myID)
-		if err == nil {
+	posts := make([]any, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := postsByID[id]; ok {
 			posts = append(posts, p)
 		}
-	}
-
-	var total int
-	switch feed {
-	case "latest", "recommended":
-		h.DB.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM posts WHERE parent_post_id IS NULL`,
-		).Scan(&total)
-	default: // "following"
-		h.DB.QueryRowContext(r.Context(), `
-			SELECT COUNT(*) FROM posts
-			WHERE parent_post_id IS NULL
-			  AND user_id IN (
-				SELECT followee_id FROM follows WHERE follower_id = ?
-			)
-		`, myID).Scan(&total)
 	}
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
@@ -94,6 +68,33 @@ func (h *Handler) GetTimeline(w http.ResponseWriter, r *http.Request) {
 		"page":     page,
 		"per_page": perPage,
 	})
+}
+
+// recommendedTimelinePage は recommended フィードの1ページ分を、キャッシュ
+// 済みの上位ランキングから切り出す。ランキングは recommendedCacheSize 件
+// までしか保持していないため、それより深いページを要求された場合は空配列
+// を返す（total は正しい総投稿数のまま）。
+func (h *Handler) recommendedTimelinePage(r *http.Request, offset, perPage int) ([]int64, int, error) {
+	rankedIDs, err := h.recommendedRankedIDs(r)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var total int
+	if err := h.DB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM posts WHERE parent_post_id IS NULL`,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	if offset >= len(rankedIDs) {
+		return nil, total, nil
+	}
+	end := offset + perPage
+	if end > len(rankedIDs) {
+		end = len(rankedIDs)
+	}
+	return rankedIDs[offset:end], total, nil
 }
 
 func (h *Handler) CreatePost(w http.ResponseWriter, r *http.Request) {
@@ -144,35 +145,28 @@ func (h *Handler) GetUserPosts(w http.ResponseWriter, r *http.Request) {
 		parentCond = "parent_post_id IS NOT NULL"
 	}
 
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id FROM posts WHERE user_id = ? AND `+parentCond+`
-		ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
-	`, userID, perPage, offset)
+	ids, total, err := h.queryIDsWithTotal(r,
+		`SELECT id, COUNT(*) OVER() AS total FROM posts WHERE user_id = ? AND `+parentCond+`
+		 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+		[]any{userID, perPage, offset}, offset,
+		`SELECT COUNT(*) FROM posts WHERE user_id = ? AND `+parentCond, []any{userID},
+	)
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "server error")
 		return
 	}
-	defer rows.Close()
 
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		rows.Scan(&id)
-		ids = append(ids, id)
+	postsByID, err := h.fetchPostsBatch(r, ids, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
-
 	posts := make([]any, 0, len(ids))
 	for _, id := range ids {
-		p, err := h.fetchPost(r, id, viewerID)
-		if err == nil {
+		if p, ok := postsByID[id]; ok {
 			posts = append(posts, p)
 		}
 	}
-
-	var total int
-	h.DB.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM posts WHERE user_id = ? AND `+parentCond, userID,
-	).Scan(&total)
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"posts":    posts,
