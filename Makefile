@@ -12,6 +12,12 @@ TF     := terraform -chdir=$(TF_DIR)
 IMAGE_TAG ?= $(shell git rev-parse HEAD)
 export IMAGE_TAG
 
+# sakuravel_backend_image_name は必須変数 (既定値なし) なので、terraform を
+# 直接呼ぶターゲットのために export しておく。terraform_apply.sh /
+# terraform_plan.sh / redeploy.sh も同じ規則で決めるので値は一致する。
+TF_VAR_sakuravel_backend_image_name ?= intern2026-app-backend:$(IMAGE_TAG)
+export TF_VAR_sakuravel_backend_image_name
+
 # レジストリのホスト名は terraform の output から取る (存在しなければ空)。
 REGISTRY = $(shell $(TF) output -raw registry_fqdn 2>/dev/null)
 
