@@ -22,6 +22,13 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${script_dir}"
 
+# terraform_apply.sh と同じ規則でイメージのタグを決める。
+# ここで設定しないと、内部の terraform apply が
+# "No value for required variable sakuravel_backend_image_name" で失敗する。
+image_tag="${IMAGE_TAG:-$(git -C "${script_dir}" rev-parse HEAD)}"
+: "${TF_VAR_sakuravel_backend_image_name:=intern2026-app-backend:${image_tag}}"
+export TF_VAR_sakuravel_backend_image_name
+
 api_root="${APPRUN_DEDICATED_API_URL:-https://secure.sakura.ad.jp/cloud/api/apprun-dedicated/1.0}"
 api_root="${api_root%/}"
 
