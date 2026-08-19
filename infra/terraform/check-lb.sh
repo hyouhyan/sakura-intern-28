@@ -1,20 +1,40 @@
 #!/usr/bin/env bash
-# LB がバックエンドの nginx にトラフィックを振り分けているか確認する。
-# 各コンテナは index.html に自分のホスト名を書き出しているので、
-# 応答をカウントすれば分散の様子がわかる。
+# LB 経由で frontend / backend に到達できるか、TLS 終端が効いているかを確認する。
 #
-#   ./check-lb.sh [リクエスト数]
+#   ./check-lb.sh
 
 set -euo pipefail
 
-count="${1:-30}"
+frontend_url="$(terraform output -raw frontend_url)"
+backend_url="$(terraform output -raw backend_url)"
 vip="$(terraform output -raw lb_vip)"
 
-echo "LB VIP: ${vip} に ${count} 回リクエストします"
+echo "LB VIP: ${vip}"
 echo
 
-for _ in $(seq "${count}"); do
-  # nginx の return は末尾に改行を付けないので echo で補って 1 行にする
-  curl -s --max-time 5 "http://${vip}/" || printf "request failed"
+check() {
+  local name="$1" url="$2"
+  printf '%-10s %s\n' "${name}" "${url}"
+
+  # -sS でエラーだけ出す。--max-time は LE 発行待ちで固まらないように短め。
+  local code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "${url}" 2>&1)" || {
+    printf '  => 接続失敗\n\n'
+    return
+  }
+  printf '  => HTTP %s\n' "${code}"
+
+  # https のときだけ証明書の発行者と対象を出す。
+  # Let's Encrypt が終端していれば issuer が R** / E** になる。
+  if [[ "${url}" == https://* ]]; then
+    local host="${url#https://}"
+    host="${host%%/*}"
+    echo | openssl s_client -connect "${host}:443" -servername "${host}" 2>/dev/null \
+      | openssl x509 -noout -subject -issuer -dates 2>/dev/null \
+      | sed 's/^/  /' || echo "  => 証明書を取得できませんでした (LE の発行待ちかも)"
+  fi
   echo
-done | sort | uniq -c | sort -rn
+}
+
+check frontend "${frontend_url}"
+check backend  "${backend_url}/trending"
