@@ -17,11 +17,22 @@ resource "sakura_database" "db" {
   password_wo         = var.db_password
   password_wo_version = 1
 
+  # アプリケーションコンテナ (AppRun のワーカーノード) と同じ vSwitch に
+  # ぶら下げて、グローバルを経由せずに接続できるようにする。
+  # ワーカーノード側の NIC は autoscalinggroup.tf の interface_index = 1。
+  #
+  # source_ranges にはワーカーノードのプライベート IP プール
+  # (network.tf の app_private_ip_start - app_private_ip_end) が
+  # 含まれている必要がある。既定では両方とも 192.168.1.0/24 の中にある。
+  #
+  # port は必ず明示すること。省略すると database_type に関係なく API 側の
+  # 既定値 5432 (PostgreSQL のポート) が入り、MariaDB でも 5432 で待ち受ける。
   network_interface = {
     vswitch_id    = sakura_vswitch.private_net.id
-    ip_address    = element(split("/", var.db_private_net_cidr), 0)
+    ip_address    = local.db_private_ip
     netmask       = tonumber(element(split("/", var.db_private_net_cidr), 1))
     gateway       = var.db_private_net_gateway
+    port          = var.db_port
     source_ranges = [var.db_private_net_allow_cidr]
   }
 

@@ -52,6 +52,20 @@ resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
   min_nodes                 = var.asg_min_nodes
   max_nodes                 = var.asg_max_nodes
 
+  # NIC は最大 5 枚まで持てる。グローバル側とプライベート側で分けている。
+  #
+  # NOTE: interfaces を含む ASG の属性はすべて RequiresReplace で、provider も
+  # Update を実装していない (完全に不変リソース)。NIC を 1 枚増やすだけでも
+  # ASG は作り直しになり、ASG を参照している LB も巻き添えで再作成される。
+  # 実測で LB の削除 3〜4 分、ASG の削除 4 分、ノードのブート 10 分前後。
+  #
+  # eth0: グローバル側。LB からの振り分けと、コンテナレジストリ /
+  #       コントロールプレーンへの通信はこちらを通る。デフォルト経路もこちら。
+  # eth1: プライベート側。DB アプライアンスと同じ vSwitch につなぐ。
+  #       ルータのない閉じたセグメントなので default_gateway は指定しない
+  #       (デフォルト経路が二重になるとグローバル側の通信が壊れる)。
+  #       ただし interfaces は Set で全要素のオブジェクト型を揃える必要が
+  #       あるため、省略ではなく null を明示している。
   interfaces = [{
     interface_index = 0
     upstream        = sakura_internet.main.vswitch_id
