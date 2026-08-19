@@ -30,7 +30,10 @@ for attempt in $(seq 1 20); do
     break
   fi
 
-  if ! grep -q "in desired state" "${log}"; then
+  # terraform のログには version リソースの ID (不正な UTF-8 のバイト列) が
+  # 混ざるため、-a を付けないと grep がバイナリ扱いしてマッチを報告しない。
+  # その結果、リトライすれば解消するエラーを恒久的な失敗と誤判定してしまう。
+  if ! grep -qa "in desired state" "${log}"; then
     echo "リトライしても解消しないエラーです:" >&2
     cat "${log}" >&2
     exit 1
