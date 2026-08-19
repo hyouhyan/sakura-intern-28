@@ -107,8 +107,12 @@ docker pull -q "${current_frontend}" >/dev/null
 docker tag "${current_frontend}" "${registry}/intern2026-app-frontend:${tag}"
 docker push -q "${registry}/intern2026-app-frontend:${tag}" >/dev/null
 
+# NOTE: IMAGE_TAG ではなく TF_VAR_... を直接渡すこと。
+# Makefile が TF_VAR_sakuravel_backend_image_name を export しているため、
+# redeploy.sh 側の ":=" (未設定時のみ代入) が効かず、IMAGE_TAG を渡しても
+# 無視されて通常のイメージがデプロイされてしまう。
 echo "==> 3/5 マイグレーション用イメージをデプロイ"
-IMAGE_TAG="${tag}" ./redeploy.sh
+TF_VAR_sakuravel_backend_image_name="intern2026-app-backend:${tag}" ./redeploy.sh
 
 echo "==> 4/5 実行結果の取得"
 vip="$(terraform output -raw lb_vip)"
@@ -119,24 +123,33 @@ case "${backend_url}" in
   https://*) curl_opts+=(--resolve "${host}:443:${vip}") ;;
 esac
 
+# コンテナの起動に数分、DB の到達待ちに最大 5 分かかるので余裕をみる。
 result=""
-for _ in $(seq 1 40); do
+for _ in $(seq 1 90); do
   body="$(curl "${curl_opts[@]}" "${backend_url}/" 2>/dev/null || true)"
   case "${body}" in
     *MIGRATE_DONE*) result="${body}"; break ;;
   esac
-  sleep 15
+  sleep 20
 done
 
 if [[ -n "${result}" ]]; then
   echo "----------------------------------------"
   echo "${result}"
   echo "----------------------------------------"
-else
-  echo "結果を取得できませんでした。手動で ${backend_url}/ を確認してください" >&2
 fi
 
 echo "==> 5/5 元のイメージに戻す"
-IMAGE_TAG="${orig_tag}" ./redeploy.sh
+TF_VAR_sakuravel_backend_image_name="intern2026-app-backend:${orig_tag}" ./redeploy.sh
+
+if [[ -z "${result}" ]]; then
+  # 取得できなかったということは、マイグレーションが走ったか分からない。
+  # 成功扱いにすると「適用済みのつもり」で先に進んでしまうので落とす。
+  echo >&2
+  echo "マイグレーションの実行結果を確認できませんでした。" >&2
+  echo "コンテナが起動しなかった可能性があります。backend は ${orig_tag} に戻してあります。" >&2
+  echo "再実行するか、${backend_url}/ を直接確認してください。" >&2
+  exit 1
+fi
 
 echo "完了: マイグレーションを適用し、backend を ${orig_tag} に戻しました"
