@@ -3,16 +3,11 @@ resource "sakura_apprun_dedicated_application" "backend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelBackend"
 
-  # NOTE: application を新規作成する apply では null にする必要がある。
-  # 詳細は variables.tf の backend_active_version を参照。
-  active_version = var.backend_active_version
 }
 
 resource "sakura_apprun_dedicated_application" "frontend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelFrontend"
-
-  active_version = var.frontend_active_version
 }
 
 
@@ -101,7 +96,7 @@ resource "sakura_apprun_dedicated_version" "frontend" {
   application_id           = sakura_apprun_dedicated_application.frontend.id
   cpu                      = 1000
   memory                   = 512
-  image                    = "${sakura_container_registry.intern.fqdn}/intern2026-app-frontend:latest"
+  image                    = "${sakura_container_registry.intern.fqdn}/${replace(var.sakuravel_backend_image_name, "intern2026-app-backend", "intern2026-app-frontend")}"
   registry_username        = var.registry_apprun_user_name
   registry_password        = var.registry_apprun_user_password
   registry_password_action = "new"

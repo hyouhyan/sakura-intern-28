@@ -118,6 +118,35 @@ variable "db_private_net_allow_cidr" {
 }
 
 ########################################
+# プライベートネットワーク (vSwitch)
+########################################
+
+variable "private_net_cidr" {
+  description = <<-EOT
+    AppRun のワーカーノードとデータベースアプライアンスを接続する
+    プライベートネットワークのセグメント。ネットワークアドレスで指定する。
+    db_private_net_cidr と同じセグメントにすること。
+  EOT
+  type        = string
+  default     = "192.168.1.0/24"
+}
+
+variable "app_private_ip_offset" {
+  description = <<-EOT
+    ワーカーノードのプライベート側IPを払い出す開始位置。
+    ここから asg_max_nodes 個のIPをASGに割り当てる。
+    既定値では .100 から払い出すため、DB (.30) やゲートウェイ (.1) と重ならない。
+  EOT
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.app_private_ip_offset >= 1
+    error_message = "app_private_ip_offset は 1 以上にしてください (0 はネットワークアドレスです)。"
+  }
+}
+
+########################################
 # ロードバランサ
 ########################################
 
@@ -256,11 +285,8 @@ variable "registry_apprun_user_name" {
 }
 
 variable "sakuravel_backend_image_name" {
-  description = "イメージ名"
+  description = "デプロイするBackendイメージ名。TF_VAR_sakuravel_backend_image_nameで指定し、Frontendも同じtagを使用する。"
   type        = string
-  default     = "intern2026-app-backend:latest"
 }
-
-
 
 

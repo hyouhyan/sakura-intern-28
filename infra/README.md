@@ -78,3 +78,18 @@ AppRun の version は不変リソースで、アクティブなものは削除�
 `./redeploy.sh` を使ってください（無効化 → 再作成 → 有効化を自動でやります）。
 
 素の `terraform apply` で済むのは、version の中身を変えないときだけです。
+
+## AppRun 専有型の最新 version を有効化する
+
+Terraform で作成済みの version のうち、最大の version 番号を AppRun 専有型 API で有効化できます。
+API キーには AppRun の操作権限を付与してください。
+
+```sh
+cd infra/terraform
+SAKURA_ACCESS_TOKEN="..." \
+SAKURA_ACCESS_TOKEN_SECRET="..." \
+./activate-latest-version.sh "<application-id>"
+```
+
+`<application-id>` は AppRun 専有型のアプリケーション ID（UUID）です。接続先を差し替える場合は
+`APPRUN_DEDICATED_API_URL`、一覧のページサイズを変える場合は `APPRUN_VERSION_PAGE_SIZE` を設定します。
