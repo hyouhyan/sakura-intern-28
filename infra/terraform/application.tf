@@ -55,9 +55,40 @@ locals {
       echo '      default_type text/plain;'
       echo '      return 200 "backend: $server_addr host=$hostname";'
       echo '    }'
+      echo '    location = /db-check {'
+      echo '      default_type text/plain;'
+      echo '      alias /tmp/db-check.txt;'
+      echo '    }'
       echo '  }'
       echo '}'
     } > /tmp/nginx.conf 2>/dev/null || true
+
+    # プライベート vSwitch (ワーカーノードの eth1) 経由で DB アプライアンスに
+    # 到達できているかを 10 秒ごとに確認し、結果を /tmp に書き出す。
+    # nginx が /db-check でそのまま返すので、LB 越しに疎通を確認できる
+    # (AppRun のワーカーノードには SSH で入れないため、疎通確認の手段がこれしかない)。
+    #
+    # busybox の nc には -z (ポートスキャン) が無いので、接続だけして
+    # 標準入力を即 EOF にすることで到達性を判定する。
+    printf 'db: probing...\n' > /tmp/db-check.txt 2>/dev/null || true
+
+    if [ -n "$DB_HOST" ]; then
+      while :; do
+        if nc -w 3 "$DB_HOST" "$DB_PORT" </dev/null >/dev/null 2>&1; then
+          db_state=ok
+        else
+          db_state=ng
+        fi
+
+        # hostname -i はコンテナ自身のアドレスを返す。
+        # プライベート側のアドレスが見えているかの確認に使う。
+        printf 'db: %s (%s:%s) container_ip=%s\n' \
+          "$db_state" "$DB_HOST" "$DB_PORT" "$(hostname -i 2>/dev/null)" \
+          > /tmp/db-check.txt 2>/dev/null || true
+
+        sleep 10
+      done &
+    fi
 
     # 書き込みか設定検証に失敗したらイメージ既定の設定で起動する。
     # ホスト名は出せなくなるが、コンテナを落とさないことを優先する。
