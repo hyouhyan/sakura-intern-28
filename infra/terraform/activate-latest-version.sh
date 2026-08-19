@@ -63,8 +63,11 @@ access_token_secret="${SAKURA_ACCESS_TOKEN_SECRET:-}"
 
 api_root="${APPRUN_DEDICATED_API_URL:-https://secure.sakura.ad.jp/cloud/api/apprun-dedicated/1.0}"
 api_root="${api_root%/}"
-page_size="${APPRUN_VERSION_PAGE_SIZE:-100}"
+# API 側の maxItems の上限は 30。これを超えると
+# "int: value 100 greater than 30" で 400 になる。
+page_size="${APPRUN_VERSION_PAGE_SIZE:-30}"
 [[ "${page_size}" =~ ^[1-9][0-9]*$ ]] || die "APPRUN_VERSION_PAGE_SIZE は正の整数にしてください"
+(( page_size <= 30 )) || die "APPRUN_VERSION_PAGE_SIZE は 30 以下にしてください (API の上限)"
 
 # UUID 以外の ID も安全に URL のパスへ埋め込めるようエスケープする。
 encoded_application_id="$(jq -rn --arg id "${application_id}" '$id | @uri')"
