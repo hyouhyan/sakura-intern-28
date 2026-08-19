@@ -119,6 +119,12 @@ resource "sakura_apprun_dedicated_version" "nginx" {
   # (write-only) を使っており state に残らないが、env_vars の value は
   # secret = true にしても state に平文で入る。実アプリを載せる際は
   # そのトレードオフを承知のうえで secret = true のエントリを足すこと。
+  #
+  # NOTE: env_vars は必ずキー名の昇順で並べること。
+  # API は登録順に関係なくキー名の昇順で返すが、provider は env_vars を
+  # List (順序あり) でモデル化しているため、宣言順が違うと apply が
+  # "Provider produced inconsistent result after apply
+  #  .env_vars[1].key: was DB_PORT, but now DB_NAME" で失敗する。
   env_vars = [
     {
       key    = "DB_HOST"
@@ -126,13 +132,13 @@ resource "sakura_apprun_dedicated_version" "nginx" {
       secret = false
     },
     {
-      key    = "DB_PORT"
-      value  = tostring(var.db_port)
+      key    = "DB_NAME"
+      value  = var.db_name
       secret = false
     },
     {
-      key    = "DB_NAME"
-      value  = var.db_name
+      key    = "DB_PORT"
+      value  = tostring(var.db_port)
       secret = false
     },
     {
