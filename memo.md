@@ -47,3 +47,23 @@ bench.sh, bench_concurrent.sh
 | GET /users/{id}/followers | count=20 avg=3.2328 p50=3.1967 p95=3.6182 p99=3.6182 max=3.6182 | n=30 total=119.14s rps=0.25 avg=34.4054 p50=34.1497 p95=37.9584 | 1 |
 | GET /users/{id}/following | count=20 avg=3.0542 p50=3.0481 p95=3.4436 p99=3.4436 max=3.4436 | n=30 total=92.77s rps=0.32 avg=28.2057 p50=28.3125 p95=30.3056 | 1 |
 | GET /profile/{id} | count=20 avg=0.0289 p50=0.0286 p95=0.0345 p99=0.0345 max=0.0345 | n=30 total=0.96s rps=31.10 avg=0.2894 p50=0.2842 p95=0.5221 | 1 |
+
+#### 改善前 (17-experiment)
+
+計測日時: 2026-08-19 18:11:17
+
+| エンドポイント | 直列 (bench.sh, n=20) | 並列 (bench_concurrent.sh, n=30 c=10) | クエリ本数 |
+|---|---|---|---|
+| GET /posts?feed=following | count=20 avg=1.2839 p50=1.2579 p95=1.5420 p99=1.5420 max=1.5420 | n=30 total=46.35s rps=0.65 avg=13.3879 p50=13.6280 p95=14.5044 | 1 |
+| GET /posts?feed=latest | count=20 avg=1.1221 p50=1.1152 p95=1.2987 p99=1.2987 max=1.2987 | n=30 total=36.79s rps=0.82 avg=11.1449 p50=11.2153 p95=11.9942 | 2 |
+| GET /users/{id}/posts | count=20 avg=0.2258 p50=0.2227 p95=0.2583 p99=0.2583 max=0.2583 | n=30 total=6.67s rps=4.50 avg=2.1460 p50=2.1539 p95=2.5045 | 1 |
+| GET /posts/{id}/thread | count=20 avg=0.1442 p50=0.1440 p95=0.1655 p99=0.1655 max=0.1655 | n=30 total=4.38s rps=6.85 avg=1.4152 p50=1.4169 p95=1.6716 | 1 |
+| GET /search?type=posts | count=20 avg=0.0116 p50=0.0114 p95=0.0162 p99=0.0162 max=0.0162 | n=30 total=0.32s rps=95.17 avg=0.0877 p50=0.0765 p95=0.1836 | 1 |
+| GET /search?type=users | count=20 avg=0.3470 p50=0.3437 p95=0.4422 p99=0.4422 max=0.4422 | n=30 total=13.99s rps=2.14 avg=3.6023 p50=3.5798 p95=4.1325 | 1 |
+| GET /notifications | count=20 avg=0.2343 p50=0.2342 p95=0.2731 p99=0.2731 max=0.2731 | n=30 total=6.93s rps=4.33 avg=2.2489 p50=2.2605 p95=2.5610 | 1 |
+| GET /me/footprints | count=20 avg=0.2245 p50=0.2240 p95=0.2557 p99=0.2557 max=0.2557 | n=30 total=9.82s rps=3.06 avg=2.2419 p50=2.2551 p95=2.4752 | 1 |
+| GET /trending | count=20 avg=0.0196 p50=0.0185 p95=0.0282 p99=0.0282 max=0.0282 | n=30 total=0.52s rps=58.02 avg=0.1432 p50=0.1441 p95=0.3029 | 2 |
+| GET /users/{id}/followers | count=20 avg=0.7148 p50=0.7148 p95=0.8301 p99=0.8301 max=0.8301 | n=30 total=24.73s rps=1.21 avg=7.1603 p50=7.3265 p95=7.7269 | 1 |
+| GET /users/{id}/following | count=20 avg=0.7743 p50=0.7730 p95=0.8348 p99=0.8348 max=0.8348 | n=30 total=26.26s rps=1.14 avg=7.6419 p50=7.6522 p95=8.0879 | 1 |
+| GET /profile/{id} | count=20 avg=0.0078 p50=0.0075 p95=0.0102 p99=0.0102 max=0.0102 | n=30 total=0.23s rps=128.36 avg=0.0671 p50=0.0579 p95=0.1496 | 1 |
+| GET /posts?feed=recommended（初回=52.209374s） | count=20 avg=53.8607 p50=52.1759 p95=65.5385 p99=65.5385 max=65.5385 | n=30 total=1667.98s rps=0.02 avg=501.8732 p50=506.6166 p95=849.1247 | 2 |
