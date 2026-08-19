@@ -59,8 +59,17 @@ resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
     netmask         = sakura_internet.main.netmask
     default_gateway = sakura_internet.main.gateway
     ip_pool = [{
-      start = local.worker_ip_start
-      end   = local.worker_ip_end
+      start = sakura_internet.main.min_ip_address
+      end   = sakura_internet.main.max_ip_address
+    }]
+    }, {
+    interface_index = 1
+    upstream        = sakura_vswitch.private_net.id
+    connects_to_lb  = false
+    netmask         = tonumber(element(split("/", var.server_private_net_cidr), 1))
+    ip_pool = [{
+      start = element(split("/", var.server_private_net_cidr), 0)
+      end   = element(split("/", var.server_private_net_cidr), 0)
     }]
   }]
 }

@@ -1,7 +1,7 @@
 ########################################
 # クラスタ
 ########################################
-resource "sakura_apprun_dedicated_cluster" "example" {
+resource "sakura_apprun_dedicated_cluster" "main" {
   name                 = var.cluster_name
   service_principal_id = var.service_principal_id
   lets_encrypt_email   = var.cluster_lets_encrypt_email
