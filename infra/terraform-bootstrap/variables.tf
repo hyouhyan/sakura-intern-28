@@ -31,3 +31,47 @@ variable "bucket_name" {
   type        = string
   default     = "intern26-group-d-bucket"
 }
+
+########################################
+# コンテナレジストリ
+########################################
+# infra/terraform (CI からのみ apply) 側に置くと、docker login が
+# レジストリの存在を前提にしているせいで「レジストリが無いと作れず、
+# 作らないとログインできない」循環に陥る。bootstrap はローカルからの
+# 手動一度きりの apply で docker login を経由しないため、ここに置く。
+
+variable "registry_name" {
+  description = "コンテナレジストリの表示名"
+  type        = string
+  default     = "intern26-group-d"
+}
+
+variable "registry_subdomain_label" {
+  description = <<-EOT
+    コンテナレジストリのホスト名になるラベル (<label>.sakuracr.jp)。
+
+    sakuracr.jp 全体で一意なので、他アカウントで使われている名前は作成できず
+    "registry_name: すでに利用されています" で 400 になる。
+    既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
+  EOT
+  type        = string
+  default     = "intern26-group-d"
+}
+
+variable "registry_ci_user_password" {
+  description = "GitHub Actions push用アカウントのパスワード"
+  type        = string
+  sensitive   = true
+}
+
+variable "registry_apprun_user_name" {
+  description = "AppRun pull用アカウント名"
+  type        = string
+  default     = "apprun"
+}
+
+variable "registry_apprun_user_password" {
+  description = "AppRun pull用アカウントのパスワード"
+  type        = string
+  sensitive   = true
+}

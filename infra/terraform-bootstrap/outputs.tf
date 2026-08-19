@@ -19,3 +19,13 @@ output "secret_key" {
   value       = sakura_object_storage_permission.tfstate.secret_key
   sensitive   = true
 }
+
+output "registry_fqdn" {
+  description = "コンテナレジストリの FQDN。infra/terraform 側の data source から参照される。"
+  value       = sakura_container_registry.intern.fqdn
+}
+
+output "registry_subdomain_label" {
+  description = "コンテナレジストリのサブドメインラベル。GitHub Secrets の REGISTRY_SUBDOMAIN と一致させる。"
+  value       = sakura_container_registry.intern.subdomain_label
+}

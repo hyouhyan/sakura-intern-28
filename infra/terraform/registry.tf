@@ -1,28 +1,9 @@
-locals {
-  registry_users = [
-    {
-      name                = "ci"
-      password_wo         = var.registry_ci_user_password
-      password_wo_version = 1
-      permission          = "all"
-    },
-    {
-      name                = var.registry_apprun_user_name
-      password_wo         = var.registry_apprun_user_password
-      password_wo_version = 1
-      permission          = "readonly"
-    }
-  ]
-}
-
-resource "sakura_container_registry" "intern" {
-  # subdomain_label は sakuracr.jp 全体で一意。他アカウントで使用済みの名前は
-  # "registry_name: すでに利用されています" で作成に失敗する。
-  # 環境ごとに別のレジストリを使えるよう変数にしている。
-  name            = var.registry_name
-  subdomain_label = var.registry_subdomain_label
-
-  description = "AppRun用のコンテナレジストリ"
-
-  user = local.registry_users
+# コンテナレジストリ本体は infra/terraform-bootstrap で作成・管理する。
+# CI (terraform-apply.yml) は apply 前に docker login でレジストリの存在を
+# 前提にしており、レジストリ自体をここで作る resource にすると
+# 「無いとログインできず、ログインできないと作れない」循環に陥るため、
+# ローカルからの手動 apply で完結する bootstrap 側に resource を置き、
+# ここでは data source として参照するだけにしている。
+data "sakura_container_registry" "intern" {
+  name = var.registry_name
 }
