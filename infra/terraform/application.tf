@@ -81,6 +81,36 @@ resource "sakura_apprun_dedicated_version" "nginx" {
 
   cmd = ["/bin/sh", "-c", local.nginx_entrypoint]
 
+  # DB への接続情報。プライベート vSwitch 側のアドレスなので、
+  # グローバルを経由せずワーカーノードの eth1 から直接届く。
+  #
+  # NOTE: パスワードは意図的に渡していない。database.tf では password_wo
+  # (write-only) を使っており state に残らないが、env_vars の value は
+  # secret = true にしても state に平文で入る。実アプリを載せる際は
+  # そのトレードオフを承知のうえで secret = true のエントリを足すこと。
+  env_vars = [
+    {
+      key    = "DB_HOST"
+      value  = local.db_private_ip
+      secret = false
+    },
+    {
+      key    = "DB_PORT"
+      value  = tostring(var.db_port)
+      secret = false
+    },
+    {
+      key    = "DB_NAME"
+      value  = var.db_name
+      secret = false
+    },
+    {
+      key    = "DB_USER"
+      value  = var.db_username
+      secret = false
+    },
+  ]
+
   # HTTP と HTTPS で受け付ける Host が異なるので concat で組み立てる。
   # concat するリストの要素は同じ属性を持つ必要があるため、
   # HTTP 側にも use_lets_encrypt を明示している。
