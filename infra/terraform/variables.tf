@@ -296,7 +296,7 @@ variable "asg_max_nodes" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名"
   type        = string
-  default     = "intern1313"
+  default     = "intern26-group-d"
 }
 
 variable "registry_subdomain_label" {
@@ -308,7 +308,7 @@ variable "registry_subdomain_label" {
     既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
   EOT
   type        = string
-  default     = "intern1313"
+  default     = "intern26-group-d"
 }
 
 variable "registry_ci_user_password" {
