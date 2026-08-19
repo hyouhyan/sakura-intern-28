@@ -296,7 +296,7 @@ variable "asg_max_nodes" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名"
   type        = string
-  default     = "intern1313"
+  default     = "intern26-group-d-registry"
 }
 
 variable "registry_subdomain_label" {
@@ -306,9 +306,13 @@ variable "registry_subdomain_label" {
     sakuracr.jp 全体で一意なので、他アカウントで使われている名前は作成できず
     "registry_name: すでに利用されています" で 400 になる。
     既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
+
+    デフォルトの "intern1313" は同じ教材を使う他の受講者と衝突するため、
+    グループ固有の名前 (intern26-group-d-registry) に変更している。
+    GitHub Secrets の REGISTRY_SUBDOMAIN もこの値と一致させること。
   EOT
   type        = string
-  default     = "intern1313"
+  default     = "intern26-group-d-registry"
 }
 
 variable "registry_ci_user_password" {

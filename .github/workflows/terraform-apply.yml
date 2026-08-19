@@ -10,6 +10,15 @@ on:
     paths:
       - "infra/terraform/**"
       - ".github/workflows/terraform-apply.yml"
+  # コンテナレジストリ自体が存在しない状態からのブートストラップ apply
+  # (レジストリを作り直した直後など) 用に、手動実行時だけイメージ存在
+  # チェックをスキップできるようにする。push トリガーでは常にチェックする。
+  workflow_dispatch:
+    inputs:
+      skip_image_check:
+        description: "backend/frontend イメージの存在チェックをスキップする (レジストリ未作成時のブートストラップ用)"
+        type: boolean
+        default: false
 
 # さくらのオブジェクトストレージは state ロックに対応していないため、
 # concurrency で apply の同時実行を防ぐ (待機させ、キャンセルはしない)。
@@ -61,9 +70,11 @@ jobs:
           echo "REGISTRY_HOST=${subdomain}.sakuracr.jp" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
+        if: github.event.inputs.skip_image_check != 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Sakura Container Registry
+        if: github.event.inputs.skip_image_check != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY_HOST }}
@@ -76,7 +87,12 @@ jobs:
       # activate-latest-version.sh を実行した時に初めてコンテナ起動失敗として
       # 顕在化してしまう (docker-build-push.yml との実行順序は保証されていないため)。
       # ここで前提条件として存在確認だけ行い、無ければ apply 前に fail させる。
+      #
+      # ただし、コンテナレジストリ自体がまだ存在しない完全ブートストラップ時は
+      # このチェックが先に失敗して肝心のレジストリ作成 apply までたどり着けない。
+      # その場合のみ workflow_dispatch の skip_image_check を true にして手動実行する。
       - name: Verify backend/frontend images exist in registry
+        if: github.event.inputs.skip_image_check != 'true'
         run: |
           backend="${{ env.REGISTRY_HOST }}/${TF_VAR_sakuravel_backend_image_name}"
           frontend="${{ env.REGISTRY_HOST }}/${TF_VAR_sakuravel_backend_image_name/intern2026-app-backend/intern2026-app-frontend}"

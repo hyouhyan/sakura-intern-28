@@ -31,6 +31,17 @@ state はさくらのオブジェクトストレージ (S3 互換 API) に保存
 ロック機能が使えないため、GitHub Actions 側の `concurrency` で
 apply の同時実行を防いでいます。
 
+apply の直前に、backend/frontend のコンテナイメージがレジストリに
+存在するかを確認するステップが入っています
+(`docker-build-push.yml` の push 未完了時に、存在しないイメージを参照する
+AppRun version を作ってしまうのを防ぐため)。
+**コンテナレジストリ自体をまだ作っていない完全なブートストラップ時**は、
+このチェックが先に失敗して `terraform apply` (＝レジストリ作成) に
+たどり着けません。その場合だけ、GitHub Actions の画面から
+`Terraform Apply` を `workflow_dispatch` で手動実行し、
+`skip_image_check` を `true` にしてイメージチェックを一度だけ迂回してください。
+レジストリ作成後にイメージを push すれば、以降は通常の push トリガーに戻せます。
+
 ### state 保存用バケットの初回作成 (bootstrap)
 
 `infra/terraform-bootstrap` で state 保存用バケットを作成します。
