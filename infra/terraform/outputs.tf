@@ -86,3 +86,13 @@ output "private_net" {
     allowed    = var.db_private_net_allow_cidr
   }
 }
+
+output "backend_application_id" {
+  description = "backend アプリケーションの ID。version の有効化 / 無効化に使う"
+  value       = sakura_apprun_dedicated_application.backend.id
+}
+
+output "frontend_application_id" {
+  description = "frontend アプリケーションの ID。version の有効化 / 無効化に使う"
+  value       = sakura_apprun_dedicated_application.frontend.id
+}
