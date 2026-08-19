@@ -13,6 +13,19 @@
 
 さくらのクラウドの API キーには **AppRun の操作権限**が必要です。
 
+## ゾーンについて
+
+既定は **石狩第3 (`is1c`)** です。
+
+この構成はスイッチを 2 つ使います（ルータ付属のグローバル用と、DB とワーカーノードをつなぐプライベート用）。**石狩第1 (`is1a`) はゾーン内のスイッチ数上限に引っかかり、2 つ目が作れませんでした。**
+
+```
+409 Conflict / limit_count_in_zone
+要求を受け付けできません。ゾーン内リソース数上限により、リソースの割り当てに失敗しました。
+```
+
+破棄から 25 分待ってリトライしても解放されませんでした。ゾーンを変える場合は、**ルータが作り直しになるので VIP が変わり、DNS の貼り直しが必要**です。
+
 ## tfvars を用意する
 
 3 つとも gitignore 対象なので、クローン後に自分で作ります。
@@ -33,6 +46,8 @@ registry_subdomain_label = "intern6"
 ---
 
 ## まっさらな状態から構築する
+
+この手順は実際にすべて破棄してから通しで実行して確認しています（is1c、所要 40 分ほど）。
 
 **順序が重要です。** イメージが無いまま version を作るとコンテナが起動せず、DNS が無いまま TLS を有効にすると Let's Encrypt のレート制限を消費します。
 
@@ -69,16 +84,38 @@ REGISTRY_HOST=<registry>.sakuracr.jp ./build_push_backend.sh
 REGISTRY_HOST=<registry>.sakuracr.jp ./build_push_frontend.sh
 ```
 
-タグは `git rev-parse HEAD` です。`terraform_apply.sh` も同じ値を使うので、**push したあとにコミットを積むとタグがずれて、存在しないイメージを指します。** ずらしたくない場合は両方で `IMAGE_TAG` を明示してください。
+タグは `git rev-parse HEAD` です。`terraform_apply.sh` と `redeploy.sh` も同じ規則で決めます。
 
-`build_push_frontend.sh` は `intern22.sakuracr.jp`（講座提供）から pull します。認証が必要なので、資格情報が無ければ自分のレジストリにある `intern2026-app-frontend:latest` を tag し直して push します。
+> **push のあとにコミットを積むとタグがずれます。** HEAD が動いた瞬間、terraform は存在しないイメージを指すようになり、コンテナが起動せず 503 のままになります。実際にこれで 8 分溶かしました。
+>
+> - デプロイの直前にコミットを積まない、または
+> - `IMAGE_TAG` を明示して固定する（`build_push_*.sh` と `terraform_apply.sh` / `redeploy.sh` の両方で同じ値にすること）
+>
+> 症状が出たら、まず state の `image` とレジストリの中身を突き合わせてください。
+>
+> ```bash
+> terraform state show sakura_apprun_dedicated_version.backend | grep image
+> docker manifest inspect <registry>.sakuracr.jp/intern2026-app-backend:$(git rev-parse HEAD)
+> ```
 
-```bash
-SHA=$(git rev-parse HEAD)
-docker tag <registry>.sakuracr.jp/intern2026-app-frontend:latest \
-           <registry>.sakuracr.jp/intern2026-app-frontend:$SHA
-docker push <registry>.sakuracr.jp/intern2026-app-frontend:$SHA
-```
+> **frontend イメージには注意が必要です。** リポジトリに Dockerfile が無く、`build_push_frontend.sh` は `intern22.sakuracr.jp`（講座提供）から pull した完成品を tag し直すだけです。**`intern22` の資格情報が唯一の正規の入手経路**で、無い場合は 401 で止まります。
+>
+> ```
+> failed to authorize: ... 401 Unauthorized
+> ```
+>
+> 資格情報が無い場合、既にイメージを持っているレジストリか手元の Docker から持ち出すしかありません。**新しく作ったレジストリには当然 `latest` も無い**ので、この逃げ道も「どこかに現物が残っている」ことが前提です。
+>
+> ```bash
+> SHA=$(git rev-parse HEAD)
+> docker tag <既存>.sakuracr.jp/intern2026-app-frontend:latest \
+>            <新>.sakuracr.jp/intern2026-app-frontend:$SHA
+> docker push <新>.sakuracr.jp/intern2026-app-frontend:$SHA
+> # あとで使うので latest も置いておくと楽
+> docker tag <既存>.sakuracr.jp/intern2026-app-frontend:latest \
+>            <新>.sakuracr.jp/intern2026-app-frontend:latest
+> docker push <新>.sakuracr.jp/intern2026-app-frontend:latest
+> ```
 
 ### 3. ネットワークだけ先に作って VIP を確定させる
 
@@ -165,10 +202,21 @@ backend の version を一時的にこのイメージに差し替えて実行し
 
 ```bash
 cd <repo>/infra/terraform
-TF_VAR_sakuravel_backend_image_name=intern2026-app-backend:migrate ./redeploy.sh
+IMAGE_TAG=migrate ./redeploy.sh
 curl -s https://<backend_host>/          # 適用結果が返る
 ./redeploy.sh                             # 本来のイメージに戻す
 ```
+
+> **frontend も巻き込まれます。** frontend のイメージ名は backend と同じ変数から
+> `replace()` で導出されるため、タグを `migrate` にすると frontend も
+> `intern2026-app-frontend:migrate` を探しに行き、無ければ 503 になります。
+> 先に同じタグで frontend を push しておいてください。
+>
+> ```bash
+> docker tag <registry>.sakuracr.jp/intern2026-app-frontend:latest \
+>            <registry>.sakuracr.jp/intern2026-app-frontend:migrate
+> docker push <registry>.sakuracr.jp/intern2026-app-frontend:migrate
+> ```
 
 ### 8. 確認する
 
@@ -218,7 +266,7 @@ terraform destroy
 破棄する前に確認してください。
 
 - **レジストリごと消えます。** `sakura_container_registry.intern` が破棄対象に入っており、中のイメージも失われます。既存のものを import している場合は特に注意してください。
-- **VIP が変わります。** `sakura_internet` を破棄すると再作成時に別セグメントが割り当てられ、DNS の貼り直しと証明書の再取得が必要になります。
+- **VIP が変わることがあります。** `sakura_internet` を破棄して作り直すとセグメントが再割り当てされます。同じゾーンで作り直したときは同じ VIP が返ってきましたが、**保証はされません**（ゾーンを変えたときは当然変わりました）。変わった場合は DNS の貼り直しと証明書の再取得が必要です。`terraform output dns_records` で確認してください。
 - **DB のデータが消えます。**
 
 ---
@@ -236,6 +284,9 @@ terraform destroy
 | `terraform apply` がアプリを無効化する | `active_version` が terraform 管理外でドリフトする | `lifecycle { ignore_changes = [active_version] }` 済み |
 | `-target` を付けたのに ASG や LB まで再作成される | `-target` は依存リソースも巻き込む | 変数を変えた状態で `-target` を使わない |
 | リトライすべきエラーで即中断する | terraform のログに不正な UTF-8 が混ざり grep がバイナリ扱いする | `grep -a` を使う（対応済み） |
+| `409 limit_count_in_zone` | ゾーン内のスイッチ数上限。`is1a` で発生 | `is1c` を使う。ゾーン変更は VIP が変わる |
+| frontend の push が 401 | `intern22` の資格情報が無い | 現物を持っているレジストリ / 手元の Docker から持ち出す |
+| デプロイ後ずっと 503 | イメージのタグが HEAD とずれている | state の `image` とレジストリを突き合わせる |
 
 ### 変えるとサービスが落ちるもの
 
