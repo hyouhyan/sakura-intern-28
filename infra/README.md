@@ -1,16 +1,13 @@
 # 28卒エンジニアインターン用インフラ
 
-構築前に tfvars をコピーして編集します：
+- [初回デプロイ手順](FIRST_DEPLOY.md)
+- [コンテナイメージ更新・再デプロイ手順](IMAGE_UPDATE.md)
 
-```
-cp secret.auto.tfvars.example secret.auto.tfvars
-cp tls.auto.tfvars.example tls.auto.tfvars
-```
+構築や更新の際は、上記の該当手順書に従ってください。クレデンシャルは
+1Passwordに保管されています。
 
-クレデンシャルなどは1Passwordに入ってます。
-
-手を動かす手順（まっさらな状態からの構築、アプリの更新、破棄、ハマりどころ）は
-[RUNBOOK.md](RUNBOOK.md) にまとめてあります。
+zoneとcluster名は `terraform/environment.auto.tfvars` に保存します。このファイルは
+git管理外です。新しい環境では `environment.auto.tfvars.example` をコピーしてください。
 
 ## 構成
 
@@ -34,63 +31,24 @@ frontend と backend をあえて別 FQDN にしているのは、アプリが
 `COOKIE_SECURE=true`（`Secure` + `SameSite=None`）と
 `ALLOWED_ORIGIN=https://<frontend_host>` が入ります。
 
-## TLS を有効にする手順
-
-1. `tls.auto.tfvars` に FQDN を 2 つ書く（`frontend_host` / `backend_host`）。
-2. LB の VIP を確認する。
-
-   ```
-   terraform output -raw lb_vip
-   ```
-
-3. **DNS の A レコードを手動で 2 本登録する**。どちらも VIP を指します。
-
-   ```
-   terraform output dns_records
-   ```
-
-   CDN のプロキシは経由させないこと。Let's Encrypt の HTTP-01 チャレンジが
-   80 番に到達できず、証明書を取得できません。
-
-4. apply する（バージョンの有効化を含むので `redeploy.sh` を使う）。
-
-   ```
-   ./redeploy.sh
-   ```
-
-5. 証明書の発行に数分かかります。反映を確認する。
-
-   ```
-   ./check-lb.sh
-   ```
-
-`enable_tls = false` にすると LB から切り離され（`lb_port = null`）、
-ワーカーノードのグローバル IP に平文 HTTP で直接ぶら下がる形に戻ります。
-
-### 前提（変更できないもの）
+## 構成上の前提
 
 LB のポートは**クラスタ作成時にしか設定できず、後から追加できません**。
 `cluster.tf` の `ports` に `80/http` と `443/https` の両方が必要です
 （80 番は Let's Encrypt の HTTP-01 チャレンジ用。アプリ側の
 `exposed_ports` に 80 番のエントリを足す必要はありません）。
 
-## デプロイ（バージョンの作り直し）
+各version resourceは `create_before_destroy` で新versionを先に作成します。作成後の
+provisionerが新versionをAppRun APIからactiveに切り替え、旧versionの
+`activeNodeCount` が0になるまで待ってから、Terraformが旧versionを削除します。
 
-AppRun の version は不変リソースで、アクティブなものは削除できません。
-イメージや環境変数を変えたときは 3 段階の apply が必要になるため、
-`./redeploy.sh` を使ってください（無効化 → 再作成 → 有効化を自動でやります）。
-
-素の `terraform apply` で済むのは、version の中身を変えないときだけです。
-
-## AppRun 専有型の最新 version を有効化する
+## versionだけを手動で有効化する
 
 Terraform で作成済みの version のうち、最大の version 番号を AppRun 専有型 API で有効化できます。
 API キーには AppRun の操作権限を付与してください。
 
 ```sh
 cd infra/terraform
-SAKURA_ACCESS_TOKEN="..." \
-SAKURA_ACCESS_TOKEN_SECRET="..." \
 ./activate-latest-version.sh "<application-id>"
 ```
 

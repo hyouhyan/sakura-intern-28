@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
+# Terraform で新しい version を作成し、apply 成功後に AppRun API で有効化する。
+# 稼働中 version は事前に無効化しない。
+
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+terraform_dir="${script_dir}/infra/terraform"
 
-# deploy.shを経由しない-target適用でもAPIトークンは.envを利用する。
-# ENABLE_TLSはデプロイごとにコマンド環境で明示し、.envの値は使用しない。
+# APIトークンは未設定の場合に.envから読み込む。ENABLE_TLSはデプロイごとに
+# コマンド環境で明示し、.envの値は使用しない。
 token_override="${SAKURA_ACCESS_TOKEN+x}"
 token_value="${SAKURA_ACCESS_TOKEN-}"
 secret_override="${SAKURA_ACCESS_TOKEN_SECRET+x}"
@@ -28,6 +32,11 @@ else
   unset ENABLE_TLS
 fi
 
+if [[ -z "${SAKURA_ACCESS_TOKEN:-}" || -z "${SAKURA_ACCESS_TOKEN_SECRET:-}" ]]; then
+  echo "エラー: SAKURA_ACCESS_TOKEN と SAKURA_ACCESS_TOKEN_SECRET を設定してください" >&2
+  exit 1
+fi
+
 case "${ENABLE_TLS:-}" in
   true|false) ;;
   *)
@@ -36,13 +45,8 @@ case "${ENABLE_TLS:-}" in
     ;;
 esac
 
-image_tag="${IMAGE_TAG:-$(git -C "${script_dir}" rev-parse HEAD)}"
+"${script_dir}/terraform_apply.sh" "$@"
 
-export TF_VAR_sakuravel_backend_image_name="intern2026-app-backend:${image_tag}"
-
-# 運用時に使う環境変数名をTerraformの入力変数へ変換する。
-[[ -z "${SAKURA_ACCESS_TOKEN:-}" ]] || export TF_VAR_sakura_access_token="${SAKURA_ACCESS_TOKEN}"
-[[ -z "${SAKURA_ACCESS_TOKEN_SECRET:-}" ]] || export TF_VAR_sakura_access_token_secret="${SAKURA_ACCESS_TOKEN_SECRET}"
-export TF_VAR_enable_tls="${ENABLE_TLS}"
-
-terraform -chdir="${script_dir}/infra/terraform" apply "$@"
+echo "デプロイが完了しました"
+echo "  frontend: $(terraform -chdir="${terraform_dir}" output -raw frontend_url)"
+echo "  backend : $(terraform -chdir="${terraform_dir}" output -raw backend_url)"

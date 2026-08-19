@@ -1,12 +1,14 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"sakuravel/migrations"
 )
 
 func New() *sql.DB {
@@ -40,5 +42,9 @@ func New() *sql.DB {
 	}
 
 	log.Println("database connected")
+	if err := migrations.Run(context.Background(), db); err != nil {
+		log.Fatalf("database migration: %v", err)
+	}
+	log.Println("database migrations applied")
 	return db
 }

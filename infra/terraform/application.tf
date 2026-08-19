@@ -115,8 +115,18 @@ resource "sakura_apprun_dedicated_version" "backend" {
     value  = "8080"
     secret = false
   }]
-}
+  lifecycle {
+    create_before_destroy = true
+  }
 
+  provisioner "local-exec" {
+    command = "${path.module}/activate-latest-version.sh ${self.application_id} ${self.version}"
+    environment = {
+      SAKURA_ACCESS_TOKEN        = var.sakura_access_token
+      SAKURA_ACCESS_TOKEN_SECRET = var.sakura_access_token_secret
+    }
+  }
+}
 resource "sakura_apprun_dedicated_version" "frontend" {
   depends_on = [sakura_apprun_dedicated_lb.main]
 
@@ -142,4 +152,16 @@ resource "sakura_apprun_dedicated_version" "frontend" {
     value  = local.backend_url
     secret = false
   }]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  provisioner "local-exec" {
+    command = "${path.module}/activate-latest-version.sh ${self.application_id} ${self.version}"
+    environment = {
+      SAKURA_ACCESS_TOKEN        = var.sakura_access_token
+      SAKURA_ACCESS_TOKEN_SECRET = var.sakura_access_token_secret
+    }
+  }
 }

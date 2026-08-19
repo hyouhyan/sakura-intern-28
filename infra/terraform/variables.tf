@@ -199,6 +199,7 @@ variable "frontend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "backend_host" {
@@ -211,6 +212,7 @@ variable "backend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "enable_tls" {
@@ -230,7 +232,6 @@ variable "enable_tls" {
         (LB のポートはクラスタ作成時にしか設定できず、後から追加できない)
   EOT
   type        = bool
-  default     = false
 
   validation {
     condition     = !var.enable_tls || (try(length(var.frontend_host) > 0, false) && try(length(var.backend_host) > 0, false))
@@ -308,7 +309,7 @@ variable "frontend_replicas" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名"
   type        = string
-  default     = "intern1313"
+  default     = "intern131313"
 }
 
 variable "registry_subdomain_label" {
@@ -320,7 +321,7 @@ variable "registry_subdomain_label" {
     既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
   EOT
   type        = string
-  default     = "intern1313"
+  default     = "intern131313"
 }
 
 variable "registry_ci_user_password" {
@@ -345,5 +346,3 @@ variable "sakuravel_backend_image_name" {
   description = "デプロイするBackendイメージ名。TF_VAR_sakuravel_backend_image_nameで指定し、Frontendも同じtagを使用する。"
   type        = string
 }
-
-
