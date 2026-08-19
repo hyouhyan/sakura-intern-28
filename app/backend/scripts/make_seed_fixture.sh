@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/bench_lib.sh"
 
 require_branch "17-experiment"
 
-SCALE="${SCALE:-5}"
+SCALE="${SCALE:-1}"
 GO_IMAGE="golang:1.25-alpine3.24"
 
 log "クリーンな状態でDBのみ起動..."
