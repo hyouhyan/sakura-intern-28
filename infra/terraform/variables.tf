@@ -283,9 +283,44 @@ variable "asg_min_nodes" {
 }
 
 variable "asg_max_nodes" {
-  description = "オートスケーリンググループの最大ノード数。AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てるため、起動するコンテナの合計数以上にする"
+  description = <<-EOT
+    オートスケーリンググループの最大ノード数。
+
+    AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てるため、
+    backend_replicas + frontend_replicas 以上にする必要がある。
+
+    NOTE: min_nodes / max_nodes は RequiresReplace で、provider は ASG の
+    Update を実装していない。この値を変えるだけで ASG が作り直しになり、
+    ASG を参照している LB も巻き添えで再作成される
+    (実測で 20 分前後のダウン + Let's Encrypt 証明書の再発行)。
+  EOT
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.asg_max_nodes >= var.asg_min_nodes
+    error_message = "asg_max_nodes は asg_min_nodes 以上にしてください。"
+  }
+}
+
+variable "backend_replicas" {
+  description = <<-EOT
+    起動する backend コンテナの数。LB はこの台数に振り分ける。
+    コンテナ 1 個につきワーカーノード 1 台を使う。
+  EOT
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.backend_replicas + var.frontend_replicas <= var.asg_max_nodes
+    error_message = "backend_replicas + frontend_replicas は asg_max_nodes 以下にしてください。AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てます。"
+  }
+}
+
+variable "frontend_replicas" {
+  description = "起動する frontend コンテナの数。"
+  type        = number
+  default     = 1
 }
 
 ########################################
