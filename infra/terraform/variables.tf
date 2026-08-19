@@ -286,6 +286,18 @@ variable "registry_apprun_user_name" {
   default     = "apprun"
 }
 
+variable "registry_name" {
+  description = "コンテナレジストリの名前"
+  type        = string
+  default     = "intern1313"
+}
+
+variable "registry_subdomain_label" {
+  description = "コンテナレジストリのサブドメインラベル (FQDN の一部になるため他ユーザーと重複不可)"
+  type        = string
+  default     = "intern1313"
+}
+
 variable "sakuravel_backend_image_name" {
   description = "イメージ名"
   type        = string

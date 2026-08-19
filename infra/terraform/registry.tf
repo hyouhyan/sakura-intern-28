@@ -16,8 +16,8 @@ locals {
 }
 
 resource "sakura_container_registry" "intern" {
-  name            = "intern1313"
-  subdomain_label = "intern1313"
+  name            = var.registry_name
+  subdomain_label = var.registry_subdomain_label
 
   description = "AppRun用のコンテナレジストリ"
 
