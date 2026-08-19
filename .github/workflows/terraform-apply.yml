@@ -37,6 +37,9 @@ env:
   TF_VAR_registry_ci_user_password: ${{ secrets.REGISTRY_CI_USER_PASSWORD }}
   TF_VAR_registry_apprun_user_password: ${{ secrets.TF_VAR_REGISTRY_APPRUN_USER_PASSWORD }}
   TF_VAR_server_password: ${{ secrets.TF_VAR_SERVER_PASSWORD }}
+  # デプロイ対象のイメージ名:タグ。docker-build-push.yml が push する latest タグを使う。
+  # frontend も同じ値から image 名部分だけ置換して使う (application.tf 参照)。
+  TF_VAR_sakuravel_backend_image_name: "intern2026-app-backend:latest"
 
 jobs:
   terraform:
@@ -45,6 +48,46 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # REGISTRY_SUBDOMAIN シークレットに前後の空白・改行が混じっていても
+      # ホスト名として不正にならないよう、ここでトリムしてから使う。
+      # (docker-build-push.yml の同名ステップと同じロジック)
+      - name: Compute registry host
+        env:
+          REGISTRY_SUBDOMAIN: ${{ secrets.REGISTRY_SUBDOMAIN }}
+        run: |
+          subdomain="$(printf '%s' "$REGISTRY_SUBDOMAIN" | tr -d '[:space:]')"
+          subdomain="${subdomain%.sakuracr.jp}"
+          echo "REGISTRY_HOST=${subdomain}.sakuracr.jp" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Sakura Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ci
+          password: ${{ secrets.REGISTRY_CI_USER_PASSWORD }}
+
+      # terraform apply は sakura_apprun_dedicated_version リソースの image に
+      # TF_VAR_sakuravel_backend_image_name のタグをそのまま渡す。そのタグが
+      # レジストリに存在しない状態で version を作成すると、後で
+      # activate-latest-version.sh を実行した時に初めてコンテナ起動失敗として
+      # 顕在化してしまう (docker-build-push.yml との実行順序は保証されていないため)。
+      # ここで前提条件として存在確認だけ行い、無ければ apply 前に fail させる。
+      - name: Verify backend/frontend images exist in registry
+        run: |
+          backend="${{ env.REGISTRY_HOST }}/${TF_VAR_sakuravel_backend_image_name}"
+          frontend="${{ env.REGISTRY_HOST }}/${TF_VAR_sakuravel_backend_image_name/intern2026-app-backend/intern2026-app-frontend}"
+
+          for image in "$backend" "$frontend"; do
+            echo "checking ${image}"
+            if ! docker buildx imagetools inspect "$image" >/dev/null; then
+              echo "::error::${image} がレジストリに見つかりません。docker-build-push.yml の push が先に完了しているか確認してください。" >&2
+              exit 1
+            fi
+          done
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
