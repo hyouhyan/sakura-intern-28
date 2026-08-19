@@ -66,15 +66,14 @@ resource "sakura_apprun_dedicated_version" "backend" {
     use_lets_encrypt = var.enable_tls ? true : null
   }]
 
+  # NOTE: env_vars は必ずキー名の昇順で並べること。
+  # AppRun の API は登録順に関係なくキー名の昇順で返すが、provider は
+  # env_vars を List (順序あり) でモデル化しているため、宣言順が昇順で
+  # ないと apply が
+  #   Provider produced inconsistent result after apply
+  #   .env_vars[1].key: was PORT, but now COOKIE_SECURE
+  # で失敗する。plan は通ってしまうので apply するまで気付けない。
   env_vars = [{
-    key    = "DATABASE_URL"
-    value  = "${var.db_username}:${var.db_password}@tcp(${element(split("/", var.db_private_net_cidr), 0)}:3306)/${var.db_name}?parseTime=true&charset=utf8mb4"
-    secret = true
-    }, {
-    key    = "PORT"
-    value  = "8080"
-    secret = false
-    }, {
     # CORS の許可オリジン。ブラウザが載せてくる Origin と完全一致する必要がある
     # (cmd/api/main.go の corsMiddleware)。
     key    = "ALLOWED_ORIGIN"
@@ -86,6 +85,17 @@ resource "sakura_apprun_dedicated_version" "backend" {
     # SameSite=None は Secure とセットでないとブラウザに拒否される。
     key    = "COOKIE_SECURE"
     value  = var.enable_tls ? "true" : "false"
+    secret = false
+    }, {
+    # 接続先はプライベート vSwitch 側のアドレスなので、ワーカーノードの
+    # eth1 から直接届く。ポートは database.tf の network_interface.port と
+    # 同じ var.db_port を使う (詳細は variables.tf の db_port を参照)。
+    key    = "DATABASE_URL"
+    value  = "${var.db_username}:${var.db_password}@tcp(${local.db_private_ip}:${var.db_port})/${var.db_name}?parseTime=true&charset=utf8mb4"
+    secret = true
+    }, {
+    key    = "PORT"
+    value  = "8080"
     secret = false
   }]
 }

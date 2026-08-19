@@ -117,15 +117,38 @@ variable "db_private_net_allow_cidr" {
   default     = "192.168.1.0/24"
 }
 
+variable "db_port" {
+  description = <<-EOT
+    データベースアプライアンスが待ち受けるポート。
+    database.tf の network_interface.port と、アプリコンテナに渡す
+    DB_PORT の両方に使う。
+
+    network_interface.port を省略すると、database_type に関係なく
+    API 側の既定値 5432 (PostgreSQL のポート) が入る。MariaDB でも
+    5432 で待ち受けてしまい、3306 宛の接続は届かない。
+    そのため database.tf では必ず明示している。
+  EOT
+  type        = number
+  default     = 3306
+
+  validation {
+    condition     = var.db_port >= 1024 && var.db_port <= 65535
+    error_message = "db_port は 1024-65535 の範囲にしてください (アプライアンスの制約)。"
+  }
+}
+
 ########################################
 # プライベートネットワーク (vSwitch)
 ########################################
 
 variable "private_net_cidr" {
   description = <<-EOT
-    AppRun のワーカーノードとデータベースアプライアンスを接続する
-    プライベートネットワークのセグメント。ネットワークアドレスで指定する。
-    db_private_net_cidr と同じセグメントにすること。
+    アプリケーションコンテナ (AppRun のワーカーノード) と DB アプライアンスを
+    つなぐプライベートネットワークのセグメント。
+
+    ネットワークアドレスで指定すること (ホストアドレスを含む
+    db_private_net_cidr とは書式が異なる)。
+    db_private_net_cidr / db_private_net_allow_cidr と同じセグメントにすること。
   EOT
   type        = string
   default     = "192.168.1.0/24"
@@ -133,9 +156,13 @@ variable "private_net_cidr" {
 
 variable "app_private_ip_offset" {
   description = <<-EOT
-    ワーカーノードのプライベート側IPを払い出す開始位置。
-    ここから asg_max_nodes 個のIPをASGに割り当てる。
-    既定値では .100 から払い出すため、DB (.30) やゲートウェイ (.1) と重ならない。
+    ワーカーノードのプライベート側 IP を、セグメントの先頭から何番目の
+    アドレスから払い出すか。ここから asg_max_nodes 個ぶんを ASG の
+    IP プールに割り当てる。
+
+    既定の 192.168.1.0/24 では .100 から asg_max_nodes 個 (既定 3 台なら
+    .100 - .102) を使う。DB アプライアンス (既定 .30)、ゲートウェイ
+    (既定 .1) と重ならない値にすること。
   EOT
   type        = number
   default     = 100
