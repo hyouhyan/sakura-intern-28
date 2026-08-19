@@ -12,5 +12,5 @@
 #   terraform -chdir=../terraform-bootstrap output -raw access_key
 #   terraform -chdir=../terraform-bootstrap output -raw secret_key
 
-access_key = "LVH25NCUMXQT4LZQCOBY"
-secret_key = "dn36vJUaZUL6yt0IR/5q2=aFrxBDtyIDhIfiVmgF"
+access_key = "********"
+secret_key = "**********"
