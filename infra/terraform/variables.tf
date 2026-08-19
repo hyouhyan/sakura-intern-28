@@ -293,6 +293,24 @@ variable "asg_max_nodes" {
 ########################################
 
 
+variable "registry_name" {
+  description = "コンテナレジストリの表示名"
+  type        = string
+  default     = "intern1313"
+}
+
+variable "registry_subdomain_label" {
+  description = <<-EOT
+    コンテナレジストリのホスト名になるラベル (<label>.sakuracr.jp)。
+
+    sakuracr.jp 全体で一意なので、他アカウントで使われている名前は作成できず
+    "registry_name: すでに利用されています" で 400 になる。
+    既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
+  EOT
+  type        = string
+  default     = "intern1313"
+}
+
 variable "registry_ci_user_password" {
   description = "GitHub Actions push用アカウントのパスワード"
   type        = string
