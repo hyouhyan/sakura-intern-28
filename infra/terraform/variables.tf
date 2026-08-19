@@ -286,8 +286,11 @@ variable "asg_max_nodes" {
   description = <<-EOT
     オートスケーリンググループの最大ノード数。
 
-    AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てるため、
-    backend_replicas + frontend_replicas 以上にする必要がある。
+    NOTE: 「コンテナ 1 個につきワーカーノード 1 台」ではない。
+    ノードの空きリソースに収まる限り、AppRun は 1 台のノードに複数の
+    コンテナを載せる。実測では backend 3 + frontend 1 = 4 コンテナ
+    (いずれも cpu=1000 / memory=512) が 3 ノードに収まった。
+    したがってこの値はノード数の上限であって、コンテナ数の上限ではない。
 
     NOTE: min_nodes / max_nodes は RequiresReplace で、provider は ASG の
     Update を実装していない。この値を変えるだけで ASG が作り直しになり、
@@ -306,14 +309,17 @@ variable "asg_max_nodes" {
 variable "backend_replicas" {
   description = <<-EOT
     起動する backend コンテナの数。LB はこの台数に振り分ける。
-    コンテナ 1 個につきワーカーノード 1 台を使う。
+
+    ノード数との関係は asg_max_nodes の説明を参照。
+    ノードの空きリソース次第で 1 ノードに複数コンテナが載るため、
+    レプリカ数と同じだけのノードが必要になるとは限らない。
   EOT
   type        = number
   default     = 3
 
   validation {
-    condition     = var.backend_replicas + var.frontend_replicas <= var.asg_max_nodes
-    error_message = "backend_replicas + frontend_replicas は asg_max_nodes 以下にしてください。AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てます。"
+    condition     = var.backend_replicas >= 1
+    error_message = "backend_replicas は 1 以上にしてください。"
   }
 }
 
