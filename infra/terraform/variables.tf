@@ -120,14 +120,21 @@ variable "db_private_net_allow_cidr" {
 variable "db_port" {
   description = <<-EOT
     データベースアプライアンスが待ち受けるポート。
+    database.tf の network_interface.port と、アプリコンテナに渡す
+    DB_PORT の両方に使う。
 
-    database.tf では network_interface.port を指定しておらず、
-    アプライアンス側の既定値 (MariaDB なら 3306) で待ち受ける。
-    ここはアプリコンテナに渡す接続情報と疎通確認に使う値なので、
-    database.tf でポートを明示した場合は同じ値に合わせること。
+    network_interface.port を省略すると、database_type に関係なく
+    API 側の既定値 5432 (PostgreSQL のポート) が入る。MariaDB でも
+    5432 で待ち受けてしまい、3306 宛の接続は届かない。
+    そのため database.tf では必ず明示している。
   EOT
   type        = number
   default     = 3306
+
+  validation {
+    condition     = var.db_port >= 1024 && var.db_port <= 65535
+    error_message = "db_port は 1024-65535 の範囲にしてください (アプライアンスの制約)。"
+  }
 }
 
 ########################################
