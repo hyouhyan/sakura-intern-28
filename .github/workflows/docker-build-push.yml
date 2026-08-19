@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - feature/terraform-github-actions # TODO: 動作確認用、確認後に削除する
+      - fix/registry-subdomain-collision # TODO: 動作確認用、確認後に削除する
     paths:
       - "app/backend/**"
       - ".github/workflows/docker-build-push.yml"

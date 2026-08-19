@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - feature/terraform-github-actions # TODO: 動作確認用の一時トリガー、確認後削除する
+      - fix/registry-subdomain-collision # TODO: 動作確認用の一時トリガー、確認後削除する
     paths:
       - "infra/terraform/**"
       - ".github/workflows/terraform-apply.yml"
