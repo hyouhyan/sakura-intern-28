@@ -19,7 +19,10 @@ variable "sakura_access_token_secret" {
 variable "zone" {
   description = "リソースを作成するゾーン。"
   type        = string
-  default     = "is1a" # 石狩第1ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択
+  # 石狩第3ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択。
+  # is1a はゾーン内のスイッチ数上限に引っかかり、この構成が必要とする
+  # 2 つ (ルータ付属 + プライベート) を確保できなかったため is1c にしている。
+  default = "is1c"
 }
 
 ########################################
@@ -57,7 +60,7 @@ variable "server_ssh_public_key_path" {
 variable "cluster_name" {
   description = "作成するクラスタの名前 (20文字以内)"
   type        = string
-  default     = "sakuravel-is1a"
+  default     = "sakuravel-is1c"
 
   validation {
     condition     = length(var.cluster_name) <= 20
