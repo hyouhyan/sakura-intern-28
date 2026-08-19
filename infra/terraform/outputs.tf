@@ -3,13 +3,29 @@
 ########################################
 
 output "lb_vip" {
-  description = "ロードバランサの VIP。ここにアクセスすると nginx に振り分けられる"
+  description = "ロードバランサの VIP。DNS の A レコードはここを指す"
   value       = local.lb_vip
 }
 
-output "lb_endpoint" {
-  description = "動作確認用の URL"
-  value       = "http://${local.lb_vip}/"
+output "dns_records" {
+  description = <<-EOT
+    手動で登録する必要がある DNS レコード。
+    Let's Encrypt の証明書取得より前に登録しておくこと。
+  EOT
+  value = var.enable_tls ? {
+    (var.frontend_host) = local.lb_vip
+    (var.backend_host)  = local.lb_vip
+  } : {}
+}
+
+output "frontend_url" {
+  description = "フロントエンドの URL"
+  value       = local.frontend_url
+}
+
+output "backend_url" {
+  description = "バックエンド API の URL"
+  value       = local.backend_url
 }
 
 output "internet_cidr" {
@@ -27,10 +43,15 @@ output "ip_allocation" {
   }
 }
 
-# output "nginx_version" {
-#   description = "作成された version 番号。nginx_active_version にこの値を設定して再 apply する"
-#   value       = sakura_apprun_dedicated_version.nginx.version
-# }
+output "backend_version" {
+  description = "作成された backend の version 番号。backend_active_version にこの値を設定して再 apply する"
+  value       = sakura_apprun_dedicated_version.backend.version
+}
+
+output "frontend_version" {
+  description = "作成された frontend の version 番号。frontend_active_version にこの値を設定して再 apply する"
+  value       = sakura_apprun_dedicated_version.frontend.version
+}
 
 output "lb_service_class" {
   description = "使用した LB のサービスクラス"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# nginx の version を作り直して有効化する。
+# backend / frontend の version を作り直して有効化する。
 #
 # AppRun の version は不変リソースで、しかもアクティブなものは削除できない。
-# そのため image や cmd を変えるたびに以下の 3 段階が必要になる:
+# そのため image や env_vars を変えるたびに以下の 3 段階が必要になる:
 #   1. application の active_version を null にする (無効化)
 #   2. 古い version を破棄して新しい version を作る
 #   3. 新しい version 番号で有効化する
@@ -13,7 +13,8 @@ set -euo pipefail
 
 echo "==> 1/3 現在のバージョンを無効化"
 terraform apply -auto-approve -input=false -var-file=deactivate.tfvars \
-  -target=sakura_apprun_dedicated_application.nginx "$@" >/dev/null
+  -target=sakura_apprun_dedicated_application.backend \
+  -target=sakura_apprun_dedicated_application.frontend "$@" >/dev/null
 
 # 無効化の直後はコンテナがまだ desired 状態に残っており、
 # 古い version を消そうとすると 400 "it is currently in desired state" になる。
@@ -45,9 +46,17 @@ for attempt in $(seq 1 20); do
   sleep 20
 done
 
-version="$(terraform output -raw nginx_version)"
+backend_version="$(terraform output -raw backend_version)"
+frontend_version="$(terraform output -raw frontend_version)"
 
-echo "==> 3/3 バージョン ${version} を有効化"
-terraform apply -auto-approve -input=false -var "nginx_active_version=${version}" "$@" >/dev/null
+echo "==> 3/3 バージョンを有効化 (backend=${backend_version} / frontend=${frontend_version})"
+terraform apply -auto-approve -input=false \
+  -var "backend_active_version=${backend_version}" \
+  -var "frontend_active_version=${frontend_version}" "$@" >/dev/null
 
-echo "完了: version ${version} / $(terraform output -raw lb_endpoint)"
+echo "完了:"
+echo "  frontend: $(terraform output -raw frontend_url)"
+echo "  backend : $(terraform output -raw backend_url)"
+
+# TLS を有効にしている場合、Let's Encrypt の証明書発行に数分かかる。
+# 発行が終わるまで 443 は繋がらないので、待ってから check-lb.sh を叩くこと。
