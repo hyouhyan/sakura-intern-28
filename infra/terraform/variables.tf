@@ -262,3 +262,19 @@ variable "asg_max_nodes" {
   type        = number
   default     = 3
 }
+
+########################################
+# コンテナレジストリ
+########################################
+
+variable "registry_ci_user_password" {
+  description = "GitHub Actions push用アカウントのパスワード"
+  type = string
+  sensitive = true
+}
+
+variable "registry_apprun_user_password" {
+  description = "AppRun pull用アカウントのパスワード"
+  type = string
+  sensitive = true
+}
