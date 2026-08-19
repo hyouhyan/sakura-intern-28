@@ -117,6 +117,55 @@ variable "db_private_net_allow_cidr" {
   default     = "192.168.1.0/24"
 }
 
+variable "db_port" {
+  description = <<-EOT
+    データベースアプライアンスが待ち受けるポート。
+
+    database.tf では network_interface.port を指定しておらず、
+    アプライアンス側の既定値 (MariaDB なら 3306) で待ち受ける。
+    ここはアプリコンテナに渡す接続情報と疎通確認に使う値なので、
+    database.tf でポートを明示した場合は同じ値に合わせること。
+  EOT
+  type        = number
+  default     = 3306
+}
+
+########################################
+# プライベートネットワーク (vSwitch)
+########################################
+
+variable "private_net_cidr" {
+  description = <<-EOT
+    アプリケーションコンテナ (AppRun のワーカーノード) と DB アプライアンスを
+    つなぐプライベートネットワークのセグメント。
+
+    ネットワークアドレスで指定すること (ホストアドレスを含む
+    db_private_net_cidr とは書式が異なる)。
+    db_private_net_cidr / db_private_net_allow_cidr と同じセグメントにすること。
+  EOT
+  type        = string
+  default     = "192.168.1.0/24"
+}
+
+variable "app_private_ip_offset" {
+  description = <<-EOT
+    ワーカーノードのプライベート側 IP を、セグメントの先頭から何番目の
+    アドレスから払い出すか。ここから asg_max_nodes 個ぶんを ASG の
+    IP プールに割り当てる。
+
+    既定の 192.168.1.0/24 では .100 から asg_max_nodes 個 (既定 3 台なら
+    .100 - .102) を使う。DB アプライアンス (既定 .30)、ゲートウェイ
+    (既定 .1) と重ならない値にすること。
+  EOT
+  type        = number
+  default     = 100
+
+  validation {
+    condition     = var.app_private_ip_offset >= 1
+    error_message = "app_private_ip_offset は 1 以上にしてください (0 はネットワークアドレスです)。"
+  }
+}
+
 ########################################
 # ロードバランサ
 ########################################
