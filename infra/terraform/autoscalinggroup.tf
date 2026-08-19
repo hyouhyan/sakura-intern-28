@@ -52,15 +52,45 @@ resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
   min_nodes                 = var.asg_min_nodes
   max_nodes                 = var.asg_max_nodes
 
-  interfaces = [{
-    interface_index = 0
-    upstream        = sakura_internet.main.vswitch_id
-    connects_to_lb  = true
-    netmask         = sakura_internet.main.netmask
-    default_gateway = sakura_internet.main.gateway
-    ip_pool = [{
-      start = local.worker_ip_start
-      end   = local.worker_ip_end
-    }]
-  }]
+  # NIC は最大 5 枚まで持てる。グローバル側とプライベート側で分けている。
+  #
+  # NOTE: interfaces を含む ASG の属性はすべて RequiresReplace で、
+  # provider 側も Update を実装していない (完全に不変リソース)。
+  # NIC を 1 枚増やすだけでも ASG は作り直しになり、ASG を参照している
+  # LB も巻き添えで再作成される。数分〜十数分のダウンを伴う。
+  interfaces = [
+    # eth0: グローバル側。LB からの振り分けと、コンテナレジストリ /
+    # コントロールプレーンへの通信はこちらを通る。
+    # デフォルト経路もこちらに置く。
+    {
+      interface_index = 0
+      upstream        = sakura_internet.main.vswitch_id
+      connects_to_lb  = true
+      netmask         = sakura_internet.main.netmask
+      default_gateway = sakura_internet.main.gateway
+      ip_pool = [{
+        start = local.worker_ip_start
+        end   = local.worker_ip_end
+      }]
+    },
+
+    # eth1: プライベート側。DB アプライアンスと同じ vSwitch につなぐ。
+    # ルータのない閉じたセグメントなので default_gateway は指定しない。
+    # ここにゲートウェイを置くとデフォルト経路が二重になり、
+    # グローバル側の通信 (レジストリからの pull 等) が壊れる。
+    #
+    # interfaces は Set なので全要素のオブジェクト型が揃っている必要がある。
+    # default_gateway を省略すると型が合わずエラーになるため null を明示する。
+    {
+      interface_index = 1
+      upstream        = sakura_vswitch.private_net.id
+      connects_to_lb  = false
+      netmask         = local.private_netmask
+      default_gateway = null
+      ip_pool = [{
+        start = local.app_private_ip_start
+        end   = local.app_private_ip_end
+      }]
+    },
+  ]
 }
