@@ -27,10 +27,10 @@ output "ip_allocation" {
   }
 }
 
-output "nginx_version" {
-  description = "作成された version 番号。nginx_active_version にこの値を設定して再 apply する"
-  value       = sakura_apprun_dedicated_version.nginx.version
-}
+# output "nginx_version" {
+#   description = "作成された version 番号。nginx_active_version にこの値を設定して再 apply する"
+#   value       = sakura_apprun_dedicated_version.nginx.version
+# }
 
 output "lb_service_class" {
   description = "使用した LB のサービスクラス"

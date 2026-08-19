@@ -44,7 +44,7 @@ locals {
 data "sakura_apprun_dedicated_worker_service_classes" "main" {}
 
 resource "sakura_apprun_dedicated_auto_scaling_group" "main" {
-  cluster_id                = sakura_apprun_dedicated_cluster.example.id
+  cluster_id                = sakura_apprun_dedicated_cluster.main.id
   name                      = "SakuravelASG"
   zone                      = var.zone
   worker_service_class_path = data.sakura_apprun_dedicated_worker_service_classes.main.classes[0].path

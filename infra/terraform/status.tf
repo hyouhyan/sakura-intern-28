@@ -3,12 +3,12 @@
 ########################################
 
 data "sakura_apprun_dedicated_worker_nodes" "main" {
-  cluster_id            = sakura_apprun_dedicated_cluster.example.id
+  cluster_id            = sakura_apprun_dedicated_cluster.main.id
   auto_scaling_group_id = sakura_apprun_dedicated_auto_scaling_group.main.id
 }
 
 data "sakura_apprun_dedicated_lb_nodes" "main" {
-  cluster_id            = sakura_apprun_dedicated_cluster.example.id
+  cluster_id            = sakura_apprun_dedicated_cluster.main.id
   auto_scaling_group_id = sakura_apprun_dedicated_auto_scaling_group.main.id
   lb_id                 = sakura_apprun_dedicated_lb.main.id
 }

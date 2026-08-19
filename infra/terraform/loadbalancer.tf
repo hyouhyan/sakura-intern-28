@@ -5,7 +5,7 @@
 data "sakura_apprun_dedicated_lb_service_classes" "main" {}
 
 resource "sakura_apprun_dedicated_lb" "main" {
-  cluster_id            = sakura_apprun_dedicated_cluster.example.id
+  cluster_id            = sakura_apprun_dedicated_cluster.main.id
   auto_scaling_group_id = sakura_apprun_dedicated_auto_scaling_group.main.id
   name                  = var.lb_name
   service_class_path    = data.sakura_apprun_dedicated_lb_service_classes.main.classes[0].path
