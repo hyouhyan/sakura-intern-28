@@ -61,9 +61,19 @@ httpd -f -p "${PORT:-8080}" -h /tmp/www &
   echo
   for f in /migrations/*.sql; do
     echo "=== $(basename "$f") ==="
-    # CREATE INDEX に IF NOT EXISTS が無いファイルがあるため、
-    # --force で「既にある」エラーを飛ばして続行する
-    $M --force "$D" < "$f" 2>&1 | head -20
+    # CREATE INDEX に IF NOT EXISTS が無いファイルがあるため、--force で
+    # 「既にある」エラーを飛ばして続行する。再実行時はそれが大量に出るので、
+    # 件数だけにまとめて本当のエラーだけを見せる。
+    out="$($M --force "$D" < "$f" 2>&1)"
+    dup="$(printf '%s\n' "$out" | grep -c 'Duplicate key name')"
+    real="$(printf '%s\n' "$out" | grep 'ERROR' | grep -v 'Duplicate key name')"
+    [ "$dup" -gt 0 ] && echo "  適用済みのためスキップ: ${dup} 件"
+    if [ -n "$real" ]; then
+      echo "  エラー:"
+      printf '%s\n' "$real" | head -10
+    else
+      echo "  OK"
+    fi
   done
   echo
   echo "=== テーブル ==="
