@@ -78,3 +78,8 @@ output "frontend_application_id" {
   description = "frontend アプリケーションの ID。version の有効化 / 無効化に使う"
   value       = sakura_apprun_dedicated_application.frontend.id
 }
+
+output "registry_fqdn" {
+  description = "コンテナレジストリのホスト名。イメージの push 先"
+  value       = sakura_container_registry.intern.fqdn
+}

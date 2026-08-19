@@ -2,6 +2,27 @@
 
 `infra/README.md` は構成の説明、こちらは手を動かす手順です。
 
+## まず `make help`
+
+リポジトリのルートに Makefile があり、以下の手順はほぼそのまま叩けます。
+
+```bash
+make help
+```
+
+| やりたいこと | コマンド |
+| --- | --- |
+| tfvars を用意する | `make init` |
+| まっさらから構築する | `make bootstrap` → DNS 登録 → `make apply deploy migrate verify` |
+| アプリを更新する | `make images && make deploy` |
+| DB マイグレーションを適用する | `make migrate` |
+| 状態を見る | `make status` / `make verify` |
+| すべて破棄する | `make destroy` |
+
+`make apply` と `make deploy` は、デプロイ予定のタグのイメージがレジストリに無ければ**実行前に止まります**（後述のタグずれ対策）。
+
+以下は各手順が何をしているか、なぜその順序なのかの説明です。手で追いたいときや、うまくいかないときに読んでください。
+
 ## 必要なもの
 
 | ツール | 用途 |
