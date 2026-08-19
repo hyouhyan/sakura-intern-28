@@ -3,11 +3,28 @@ resource "sakura_apprun_dedicated_application" "backend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelBackend"
 
+  # active_version は activate-latest-version.sh (AppRun API) で設定するため
+  # terraform では管理しない。宣言しないままだと、外部で有効化した値が
+  # ドリフトとして検出され、素の terraform apply が
+  #   active_version = 1 -> null
+  # を実行してアプリを無効化してしまう (サービス断)。
+  lifecycle {
+    ignore_changes = [active_version]
+  }
 }
 
 resource "sakura_apprun_dedicated_application" "frontend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelFrontend"
+
+  # active_version は activate-latest-version.sh (AppRun API) で設定するため
+  # terraform では管理しない。宣言しないままだと、外部で有効化した値が
+  # ドリフトとして検出され、素の terraform apply が
+  #   active_version = 1 -> null
+  # を実行してアプリを無効化してしまう (サービス断)。
+  lifecycle {
+    ignore_changes = [active_version]
+  }
 }
 
 
