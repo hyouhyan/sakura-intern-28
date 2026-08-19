@@ -34,10 +34,20 @@ func (h *Handler) GetTrending(w http.ResponseWriter, r *http.Request) {
 		rawTrends = append(rawTrends, t)
 	}
 
+	ids := make([]int64, len(rawTrends))
+	for i, rt := range rawTrends {
+		ids[i] = rt.postID
+	}
+	postsByID, err := h.fetchPostsBatch(r, ids, myID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+
 	posts := make([]any, 0, len(rawTrends))
 	for _, rt := range rawTrends {
-		p, err := h.fetchPost(r, rt.postID, myID)
-		if err != nil {
+		p, ok := postsByID[rt.postID]
+		if !ok {
 			continue
 		}
 		posts = append(posts, map[string]any{

@@ -20,9 +20,13 @@ func New() *sql.DB {
 		log.Fatalf("db open: %v", err)
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	db.SetConnMaxLifetime(0)
+	// MariaDB のデフォルト max_connections（151）に対して十分小さく、かつ
+	// 現行のVMスペック（1コア/1GBメモリ、DBもAPIも同居）でも無理のない値
+	// として20を選定。VM・DBのスペックを見直すタイミングで再チューニングする。
+	db.SetMaxOpenConns(20)
+	db.SetMaxIdleConns(20)
+	// 長時間張りっぱなしの古い接続が残り続けないよう、定期的に張り直す。
+	db.SetConnMaxLifetime(5 * time.Minute)
 
 	for i := 0; i < 10; i++ {
 		if err = db.Ping(); err == nil {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"sakuravel/internal/model"
 	"sakuravel/internal/realtime"
 )
 
@@ -82,57 +83,61 @@ func (h *Handler) GetThread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 祖先をたどる（古い順に並べ替えて返す）
-	ancestors := make([]any, 0)
-	parent := post.ParentPostID
-	for depth := 0; parent != nil && depth < maxThreadDepth; depth++ {
-		a, err := h.fetchPost(r, *parent, viewerID)
-		if err != nil {
-			break
+	// 祖先の投稿IDを再帰CTEで一括取得する（古い順）
+	ancestorIDs, err := h.fetchAncestorIDs(r, postID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	ancestorsByID, err := h.fetchPostsBatch(r, ancestorIDs, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	ancestors := make([]any, 0, len(ancestorIDs))
+	for _, id := range ancestorIDs {
+		if a, ok := ancestorsByID[id]; ok {
+			ancestors = append(ancestors, a)
 		}
-		ancestors = append([]any{a}, ancestors...)
-		parent = a.ParentPostID
+	}
+
+	// 返信ツリーは、まず id と親子関係だけを再帰CTEで一括取得し、最後に
+	// 対象ノード全件をバッチ取得する（ノードごとに子取得クエリを発行する
+	// 逐次探索を避けるため）。
+	childrenOf, err := h.fetchDescendantEdges(r, postID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
+	}
+	var descendantIDs []int64
+	for _, ids := range childrenOf {
+		descendantIDs = append(descendantIDs, ids...)
+	}
+	descendantsByID, err := h.fetchPostsBatch(r, descendantIDs, viewerID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "server error")
+		return
 	}
 
 	h.respondJSON(w, http.StatusOK, map[string]any{
 		"ancestors": ancestors,
 		"post":      post,
-		"replies":   h.fetchReplyTree(r, postID, viewerID, 0),
+		"replies":   buildReplyTree(postID, childrenOf, descendantsByID),
 	})
 }
 
-// fetchReplyTree は子返信をツリー状に取得する。
-func (h *Handler) fetchReplyTree(r *http.Request, postID, viewerID int64, depth int) []any {
+// buildReplyTree は fetchDescendantEdges / fetchPostsBatch の結果から
+// 返信ツリーを組み立てる（DBへの追加問い合わせなし）。
+func buildReplyTree(postID int64, childrenOf map[int64][]int64, postsByID map[int64]model.Post) []any {
 	nodes := make([]any, 0)
-	if depth >= maxThreadDepth {
-		return nodes
-	}
-
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT id FROM posts
-		WHERE parent_post_id = ?
-		ORDER BY created_at ASC, id ASC
-	`, postID)
-	if err != nil {
-		return nodes
-	}
-
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		rows.Scan(&id)
-		ids = append(ids, id)
-	}
-	rows.Close()
-
-	for _, id := range ids {
-		p, err := h.fetchPost(r, id, viewerID)
-		if err != nil {
+	for _, id := range childrenOf[postID] {
+		p, ok := postsByID[id]
+		if !ok {
 			continue
 		}
 		nodes = append(nodes, map[string]any{
 			"post":    p,
-			"replies": h.fetchReplyTree(r, id, viewerID, depth+1),
+			"replies": buildReplyTree(id, childrenOf, postsByID),
 		})
 	}
 	return nodes
