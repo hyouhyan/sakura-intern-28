@@ -1,15 +1,13 @@
 # 28卒エンジニアインターン用インフラ
 
-構築前に tfvars をコピーして編集します：
+- [初回デプロイ手順](FIRST_DEPLOY.md)
+- [コンテナイメージ更新・再デプロイ手順](IMAGE_UPDATE.md)
 
-```
-cp secret.auto.tfvars.example secret.auto.tfvars
-```
+構築や更新の際は、上記の該当手順書に従ってください。クレデンシャルは
+1Passwordに保管されています。
 
-クレデンシャルなどは1Passwordに入ってます。
-
-手を動かす手順（まっさらな状態からの構築、アプリの更新、破棄、ハマりどころ）は
-[RUNBOOK.md](RUNBOOK.md) にまとめてあります。
+zoneとcluster名は `terraform/environment.auto.tfvars` に保存します。このファイルは
+git管理外です。新しい環境では `environment.auto.tfvars.example` をコピーしてください。
 
 ## 構成
 
@@ -33,144 +31,16 @@ frontend と backend をあえて別 FQDN にしているのは、アプリが
 `COOKIE_SECURE=true`（`Secure` + `SameSite=None`）と
 `ALLOWED_ORIGIN=https://<frontend_host>` が入ります。
 
-## 初回構築手順
-
-以下はすべてリポジトリルートで実行します。最初に `.env` を作成し、
-APIトークンを設定します。
-
-```sh
-cp .env.example .env
-```
-
-```dotenv
-SAKURA_ACCESS_TOKEN="..."
-SAKURA_ACCESS_TOKEN_SECRET="..."
-ENABLE_TLS=false
-```
-
-`terraform_apply.sh` と `deploy.sh` はリポジトリルートの `.env` を自動で読み、
-APIトークンをTerraformの入力変数へ変換します。
-公開ドメインは `secret.auto.tfvars` の `frontend_host` と `backend_host` に設定します。
-TLSの有効・無効だけは、各デプロイ時に `ENABLE_TLS` で指定します。
-
-既存の `secret.auto.tfvars` に `sakura_access_token`、
-`sakura_access_token_secret`、`enable_tls` がある場合は削除してください。
-`.auto.tfvars` の値は環境変数より優先されるためです。
-
-### 1. コンテナレジストリを作成（初回のみ）
-
-```sh
-./terraform_apply.sh \
-  -target=sakura_container_registry.intern \
-  -auto-approve
-```
-
-作成されたレジストリのホスト名と、デプロイに使うGit SHAを取得します。
-
-```sh
-export REGISTRY_HOST="$(terraform -chdir=infra/terraform output -raw registry_fqdn)"
-export IMAGE_TAG="$(git rev-parse HEAD)"
-```
-
-### 2. Docker imageをpush（初回およびアプリ更新時）
-
-作成したレジストリへ、`secret.auto.tfvars` のciユーザー情報でログインします。
-
-```sh
-docker login "${REGISTRY_HOST}" --username ci
-```
-
-backendをAppRun用の `linux/amd64` imageとしてbuild・pushします。
-
-```sh
-docker buildx build \
-  --platform linux/amd64 \
-  --tag "${REGISTRY_HOST}/intern2026-app-backend:${IMAGE_TAG}" \
-  --push \
-  ./app/backend
-```
-
-配布済みfrontend imageを自分のレジストリへpushします。
-
-```sh
-docker login intern22.sakuracr.jp
-docker pull --platform linux/amd64 \
-  intern22.sakuracr.jp/intern2026-app-frontend:latest
-docker tag \
-  intern22.sakuracr.jp/intern2026-app-frontend:latest \
-  "${REGISTRY_HOST}/intern2026-app-frontend:${IMAGE_TAG}"
-docker push "${REGISTRY_HOST}/intern2026-app-frontend:${IMAGE_TAG}"
-```
-
-### 3. TLSなしでTerraform初回デプロイ
-
-```sh
-ENABLE_TLS=false ./deploy.sh -auto-approve
-```
-
-`deploy.sh` は現在のGit SHAと同じタグのimageを参照します。手順2と3の間に
-commitを切り替えた場合は、`IMAGE_TAG` を合わせてから再度pushしてください。
-
-### 4. DNSを設定
-
-LBのVIPを確認します。
-
-```sh
-terraform -chdir=infra/terraform output -raw lb_vip
-```
-
-`secret.auto.tfvars` の `frontend_host` と `backend_host` のDNS Aレコードを、
-どちらも表示されたVIPへ向けます。CDNのプロキシは経由させないでください。Let's EncryptのHTTP-01
-チャレンジが80番へ到達できなくなります。
-
-名前解決を確認します。
-
-```sh
-dig +short app.example.com A
-dig +short api.example.com A
-```
-
-### 5. TLSを有効化して再デプロイ
-
-```sh
-ENABLE_TLS=true ./deploy.sh -auto-approve
-```
-
-証明書の発行には数分かかる場合があります。発行後に接続を確認します。
-
-```sh
-./infra/terraform/check-lb.sh
-```
-
-`enable_tls = false` にすると LB から切り離され（`lb_port = null`）、
-ワーカーノードのグローバル IP に平文 HTTP で直接ぶら下がる形に戻ります。
-
-### 前提（変更できないもの）
+## 構成上の前提
 
 LB のポートは**クラスタ作成時にしか設定できず、後から追加できません**。
 `cluster.tf` の `ports` に `80/http` と `443/https` の両方が必要です
 （80 番は Let's Encrypt の HTTP-01 チャレンジ用。アプリ側の
 `exposed_ports` に 80 番のエントリを足す必要はありません）。
 
-## デプロイ（バージョンの作り直し）
-
-リポジトリルートから次の1コマンドで実行します。
-
-```sh
-ENABLE_TLS=true \
-./deploy.sh
-```
-
-`deploy.sh` はTerraformで新しいversionを作成し、applyが成功した後にbackend、
-frontendの順で最新versionをAppRun APIから有効化します。稼働中versionは事前に
-無効化せず、実コンテナの切り替えはAppRunのversion切り替え機構に委ねます。
-
-Terraformへオプションを渡す場合は、そのまま末尾に指定できます。
-
-```sh
-ENABLE_TLS=true \
-./deploy.sh -auto-approve
-```
+各version resourceは `create_before_destroy` で新versionを先に作成します。作成後の
+provisionerが新versionをAppRun APIからactiveに切り替え、旧versionの
+`activeNodeCount` が0になるまで待ってから、Terraformが旧versionを削除します。
 
 ## versionだけを手動で有効化する
 

@@ -5,9 +5,11 @@
 
 set -euo pipefail
 
-frontend_url="$(terraform output -raw frontend_url)"
-backend_url="$(terraform output -raw backend_url)"
-vip="$(terraform output -raw lb_vip)"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+frontend_url="$(terraform -chdir="${script_dir}" output -raw frontend_url)"
+backend_url="$(terraform -chdir="${script_dir}" output -raw backend_url)"
+vip="$(terraform -chdir="${script_dir}" output -raw lb_vip)"
 
 echo "LB VIP: ${vip}"
 echo

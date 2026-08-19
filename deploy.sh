@@ -7,9 +7,9 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 terraform_dir="${script_dir}/infra/terraform"
-activate_script="${terraform_dir}/activate-latest-version.sh"
 
-# コマンド実行時に明示された値を優先しつつ、未設定の値を.envから読み込む。
+# APIトークンは未設定の場合に.envから読み込む。ENABLE_TLSはデプロイごとに
+# コマンド環境で明示し、.envの値は使用しない。
 token_override="${SAKURA_ACCESS_TOKEN+x}"
 token_value="${SAKURA_ACCESS_TOKEN-}"
 secret_override="${SAKURA_ACCESS_TOKEN_SECRET+x}"
@@ -26,7 +26,11 @@ fi
 
 [[ "${token_override}" != x ]] || export SAKURA_ACCESS_TOKEN="${token_value}"
 [[ "${secret_override}" != x ]] || export SAKURA_ACCESS_TOKEN_SECRET="${secret_value}"
-[[ "${tls_override}" != x ]] || export ENABLE_TLS="${tls_value}"
+if [[ "${tls_override}" == x ]]; then
+  export ENABLE_TLS="${tls_value}"
+else
+  unset ENABLE_TLS
+fi
 
 if [[ -z "${SAKURA_ACCESS_TOKEN:-}" || -z "${SAKURA_ACCESS_TOKEN_SECRET:-}" ]]; then
   echo "エラー: SAKURA_ACCESS_TOKEN と SAKURA_ACCESS_TOKEN_SECRET を設定してください" >&2
@@ -36,21 +40,12 @@ fi
 case "${ENABLE_TLS:-}" in
   true|false) ;;
   *)
-    echo "エラー: ENABLE_TLS は true または false で指定してください" >&2
+    echo "エラー: ENABLE_TLS=true または ENABLE_TLS=false をコマンド実行時に明示してください" >&2
     exit 1
     ;;
 esac
 
 "${script_dir}/terraform_apply.sh" "$@"
-
-backend_application_id="$(terraform -chdir="${terraform_dir}" output -raw backend_application_id)"
-frontend_application_id="$(terraform -chdir="${terraform_dir}" output -raw frontend_application_id)"
-
-echo "==> backend の最新 version を有効化"
-"${activate_script}" "${backend_application_id}"
-
-echo "==> frontend の最新 version を有効化"
-"${activate_script}" "${frontend_application_id}"
 
 echo "デプロイが完了しました"
 echo "  frontend: $(terraform -chdir="${terraform_dir}" output -raw frontend_url)"
