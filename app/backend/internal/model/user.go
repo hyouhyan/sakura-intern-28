@@ -3,6 +3,7 @@ package model
 import "time"
 //変更してみた
 //変更してみた
+//変更してみた
 
 type User struct {
 	ID             int64     `json:"id"`
