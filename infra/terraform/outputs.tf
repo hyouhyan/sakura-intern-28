@@ -36,3 +36,14 @@ output "lb_service_class" {
   description = "使用した LB のサービスクラス"
   value       = data.sakura_apprun_dedicated_lb_service_classes.main.classes[0]
 }
+
+output "private_net" {
+  description = "プライベートネットワーク (アプリコンテナ <-> DB) の IP 割り当て"
+  value = {
+    vswitch_id = sakura_vswitch.private_net.id
+    cidr       = var.private_net_cidr
+    database   = "${local.db_private_ip}:${var.db_port}"
+    app_nodes  = "${local.app_private_ip_start} - ${local.app_private_ip_end}"
+    allowed    = var.db_private_net_allow_cidr
+  }
+}
