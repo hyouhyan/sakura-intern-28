@@ -3,16 +3,11 @@ resource "sakura_apprun_dedicated_application" "backend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelBackend"
 
-  # NOTE: application を新規作成する apply では null にする必要がある。
-  # 詳細は variables.tf の backend_active_version を参照。
-  active_version = var.backend_active_version
 }
 
 resource "sakura_apprun_dedicated_application" "frontend" {
   cluster_id = sakura_apprun_dedicated_cluster.main.id
   name       = "SakuravelFrontend"
-
-  active_version = var.frontend_active_version
 }
 
 
