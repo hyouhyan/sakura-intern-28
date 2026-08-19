@@ -158,7 +158,15 @@ cd infra/terraform
 
 ### 7. DB マイグレーションを適用する
 
-**terraform では適用されません。** データベースアプライアンスはプライベート網からしか到達できないため、AppRun 上に一時的なコンテナを流して適用します。仕組み化はまだできていません。
+**terraform では適用されません。** AppRun 上に一時的なコンテナを流して適用します。
+
+なぜ terraform に寄せられないか:
+
+- **さくらのデータベースにマイグレーション機能はありません。** provider のリソースは `sakura_database` / `sakura_database_read_replica` だけで、SQL を流す口はありません。アプライアンスの API にも `parameter`（`my.cnf` 相当の設定値）と `status` しかありません。
+- **terraform を実行するマシンから DB に到達できません。** アプライアンスはプライベート vSwitch 上にしか IP を持たず、`source_ranges` もその中に閉じています。そのため `provisioner "local-exec"` や MySQL 系の provider を使っても接続できません。踏み台を私設すれば別ですが、そのためだけにサーバを 1 台増やすことになります。
+- **AppRun に init コンテナやジョブの概念がありません。** `sakura_apprun_dedicated_version` が持つのは `cmd` / `env_vars` / `exposed_ports` などで、起動前に一度だけ何かを走らせる仕組みはありません。
+
+現実的な解は **backend の起動時にマイグレーションを実行させる**ことです。そうすれば `terraform apply` と version の有効化だけで schema まで揃います。実装するときは、レプリカが同時に起動するため排他制御（MariaDB なら `GET_LOCK()`、golang-migrate なら組み込みのロック）が必要です。
 
 ```bash
 mkdir -p /tmp/migrate && cd /tmp/migrate
