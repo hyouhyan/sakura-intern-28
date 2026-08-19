@@ -1,4 +1,4 @@
-# Let's Encrypt による TLS 終端の設定。
+# AppRun ロードバランサによる TLS 終端 (Let's Encrypt) の設定。
 # 使うときはコピーして FQDN を書き換える:
 #   cp tls.auto.tfvars.example tls.auto.tfvars
 #
@@ -6,10 +6,17 @@
 # 明示指定にすると、素の terraform apply を打ったときに
 # TLS 設定が消える事故が起きるのでこの形にしている。
 #
-# 事前に DNS の A レコードを手動で登録しておくこと:
-#   <FQDN>  A  <terraform output -raw lb_vip の値>
+# 事前に DNS の A レコードを 2 本とも手動で登録しておくこと
+# (どちらも LB の VIP を指す。値は terraform output -raw lb_vip):
+#   <frontend_host>  A  <lb_vip>
+#   <backend_host>   A  <lb_vip>
 #
 # CDN のプロキシは経由させないこと。
 # Let's Encrypt の HTTP-01 チャレンジが 80 番に到達できず証明書を取得できない。
-nginx_hosts      = ["apprun-test.example.com"]
-nginx_enable_tls = true
+#
+# frontend と backend で FQDN を分けるのは、LB が Host ヘッダでしか
+# 振り分けられないため。ブラウザから見ると別オリジンになるので、
+# backend 側は CORS + Secure/SameSite=None Cookie で受ける (自動で設定される)。
+frontend_host = "apprun-test.example.com"
+backend_host  = "api.apprun-test.example.com"
+enable_tls    = true
