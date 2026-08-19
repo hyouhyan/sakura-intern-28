@@ -29,5 +29,5 @@ variable "object_storage_site_id" {
 variable "bucket_name" {
   description = "Terraform state 保存用バケット名。"
   type        = string
-  default     = "intern2026-tfstate"
+  default     = "intern-matsu-tfstate"
 }

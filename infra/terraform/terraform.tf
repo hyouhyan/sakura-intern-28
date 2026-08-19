@@ -23,7 +23,7 @@ terraform {
   # use_lockfile は使用不可。排他制御は GitHub Actions の concurrency で行う
   # (.github/workflows/terraform-apply.yml)。
   backend "s3" {
-    bucket = "intern2026-tfstate"
+    bucket = "intern-matsu-tfstate"
     key    = "terraform.tfstate"
     region = "jp-north-1"
 
