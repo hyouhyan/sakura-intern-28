@@ -9,6 +9,9 @@ cp tls.auto.tfvars.example tls.auto.tfvars
 
 クレデンシャルなどは1Passwordに入ってます。
 
+手を動かす手順（まっさらな状態からの構築、アプリの更新、破棄、ハマりどころ）は
+[RUNBOOK.md](RUNBOOK.md) にまとめてあります。
+
 ## 構成
 
 ```

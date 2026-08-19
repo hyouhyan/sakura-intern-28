@@ -66,7 +66,7 @@ resource "sakura_apprun_dedicated_version" "backend" {
   registry_password        = var.registry_apprun_user_password
   registry_password_action = "new"
   scaling_mode             = "manual"
-  fixed_scale              = 1
+  fixed_scale              = var.backend_replicas
 
   # lb_port 80 のエントリは不要。Let's Encrypt の HTTP-01 チャレンジに
   # 必要なのは「クラスタに 80/http ポートが存在すること」であって
@@ -128,7 +128,7 @@ resource "sakura_apprun_dedicated_version" "frontend" {
   registry_password        = var.registry_apprun_user_password
   registry_password_action = "new"
   scaling_mode             = "manual"
-  fixed_scale              = 1
+  fixed_scale              = var.frontend_replicas
 
   exposed_ports = [{
     target_port      = 3000
