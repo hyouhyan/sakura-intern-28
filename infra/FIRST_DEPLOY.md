@@ -18,7 +18,6 @@
   - セキュリティコントロール管理者
 
 <img width="1972" height="292" alt="image" src="https://github.com/user-attachments/assets/574df24a-1d3e-4953-8009-4812819c0fb5" />  
-memo: 図が違う。運用者じゃなくて管理者
 
 アクセストークン、アクセストークンシークレットを保存しておく
 
@@ -51,6 +50,7 @@ memo: 図が違う。運用者じゃなくて管理者
 
 3. ロールにて「さくらのクラウド > 作成・削除」と「AppRun > AppRun専有型管理者」を選択  
 <img width="1828" height="1436" alt="image" src="https://github.com/user-attachments/assets/df886a8c-671f-4df3-b4e5-0cc79f7f603f" />  
+<img width="907" height="415" alt="image" src="https://github.com/user-attachments/assets/9a049c1e-e84c-4eff-b086-f37a17d28a2d" />    
 <img width="1728" height="1038" alt="image" src="https://github.com/user-attachments/assets/0fb57002-75ac-409e-8444-72361ab43a41" />
 
 4. 「作成」をクリック
