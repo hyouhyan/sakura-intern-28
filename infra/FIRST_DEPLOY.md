@@ -74,8 +74,6 @@ cp infra/terraform-bootstrap/sercet.auto.tfvars.example \
 
 ```sh
 terraform -chdir=infra/terraform-bootstrap init
-terraform -chdir=infra/terraform-bootstrap fmt -check
-terraform -chdir=infra/terraform-bootstrap validate
 terraform -chdir=infra/terraform-bootstrap plan
 terraform -chdir=infra/terraform-bootstrap apply
 ```
@@ -148,8 +146,6 @@ export TFSTATE_BUCKET="$(terraform -chdir=infra/terraform-bootstrap output -raw 
 terraform -chdir=infra/terraform init \
   -backend-config=backend.hcl \
   -backend-config="bucket=${TFSTATE_BUCKET}"
-terraform -chdir=infra/terraform fmt -check -recursive
-terraform -chdir=infra/terraform validate
 ```
 
 ## 7. 初回デプロイ用イメージを用意する
