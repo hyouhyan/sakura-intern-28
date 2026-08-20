@@ -24,12 +24,13 @@ terraform init \
 
 ## Terraform apply について
 
-`infra/terraform` の `terraform apply` は GitHub Actions
-(`.github/workflows/deploy.yml`) からのみ実行します。
+初期デプロイの`infra/terraform`への`terraform apply`は
+[初回デプロイ手順](FIRST_DEPLOY.md)に従ってローカルで実行します。初期構築後の
+`terraform apply`はGitHub Actions (`.github/workflows/deploy.yml`) から実行します。
 `main` へのマージ・push を契機に、backend/frontendへ同じGit SHAのタグを付けて
 pushした後、`init` → `validate` → `plan` → `apply` が順番に実行されます。
-ローカルから `terraform apply` を実行しないでください
-(`terraform plan` までの確認はローカルで行って構いません)。
+初期構築後はローカルから`terraform apply`を実行しないでください
+（`terraform plan`までの確認はローカルで行って構いません）。
 
 state はさくらのオブジェクトストレージ (S3 互換 API) に保存しており、
 ロック機能が使えないため、GitHub Actions 側の `concurrency` で
