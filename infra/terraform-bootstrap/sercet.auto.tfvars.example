@@ -15,3 +15,11 @@ registry_apprun_user_password = ""
 # 初期イメージ (frontend/backend) の pull に使用する
 source_registry_username = ""
 source_registry_password = ""
+
+registry_name = "intern131313"
+
+# Terraform state 保存用。オブジェクトストレージ全体で一意の名前にする
+bucket_name = "intern26-group-d-tfstate-131313"
+
+# <registry_subdomain_label>.sakuracr.jp として利用される
+registry_subdomain_label = "intern131313"

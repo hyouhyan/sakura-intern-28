@@ -29,7 +29,6 @@ variable "object_storage_site_id" {
 variable "bucket_name" {
   description = "Terraform state 保存用バケット名。"
   type        = string
-  default     = "intern26-group-d-bucket"
 }
 
 ########################################
@@ -43,7 +42,6 @@ variable "bucket_name" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名"
   type        = string
-  default     = "intern26-group-d"
 }
 
 variable "registry_subdomain_label" {
@@ -55,7 +53,6 @@ variable "registry_subdomain_label" {
     既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
   EOT
   type        = string
-  default     = "intern26-group-d"
 }
 
 variable "registry_ci_user_password" {

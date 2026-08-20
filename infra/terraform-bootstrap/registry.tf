@@ -30,7 +30,7 @@ resource "sakura_container_registry" "intern" {
 ########################################
 # 初期イメージ投入
 ########################################
-# infra/terraform 側の CI (terraform-apply.yml) は apply 前に
+# infra/terraform 側の CI (deploy.yml) は apply 前に
 # 「backend/frontend イメージがレジストリに存在するか」を確認する
 # (Verify backend/frontend images exist in registry)。
 # レジストリを作成した直後はイメージが1つも無くこの確認に失敗するため、
@@ -43,7 +43,7 @@ resource "sakura_container_registry" "intern" {
 # ローカル apply で完結する bootstrap 側に置く。
 #
 # frontend はこのリポジトリ内でビルドされないため常に配布元からの
-# シードが必要。backend は docker-build-push.yml が継続的に push するが、
+# シードが必要。backend は deploy.yml が継続的に push するが、
 # bootstrap 初回 apply の時点ではまだ1度も push されていないため、
 # 同様にベースラインとして投入する (var.seed_images で調整可能)。
 

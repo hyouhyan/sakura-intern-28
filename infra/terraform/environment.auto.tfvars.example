@@ -1,4 +1,7 @@
 # 環境作成後に変更すると主要リソースが再作成されるため、環境ごとに固定する。
 # このファイルを environment.auto.tfvars にコピーして利用する。
-zone         = "is1a"
-cluster_name = "sakuravel-is1a"
+zone                       = "is1a"
+cluster_name               = "sakuravel-is1a"
+cluster_lets_encrypt_email = "admin@example.com"
+registry_name              = "<your_registry_name>"
+enable_tls                 = true
