@@ -26,34 +26,6 @@ variable "zone" {
 }
 
 ########################################
-# サーバー
-########################################
-
-variable "server_name" {
-  description = "作成するサーバーの名前"
-  type        = string
-  default     = "docker-host"
-}
-
-variable "server_private_net_cidr" {
-  description = "サーバーが接続するプライベートネットワークの CIDR"
-  type        = string
-  default     = "192.168.1.40/24"
-}
-
-variable "server_password" {
-  description = "サーバーの初期パスワード (SSH 公開鍵認証を使用する場合でも必要)"
-  type        = string
-  sensitive   = true
-}
-
-variable "server_ssh_public_key_path" {
-  description = "サーバーへの SSH 公開鍵認証で使用する公開鍵ファイルのパス"
-  type        = string
-  default     = ""
-}
-
-########################################
 # クラスタ
 ########################################
 
