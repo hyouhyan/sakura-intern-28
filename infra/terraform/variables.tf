@@ -232,6 +232,7 @@ variable "enable_tls" {
         (LB のポートはクラスタ作成時にしか設定できず、後から追加できない)
   EOT
   type        = bool
+  default     = false
 
   validation {
     condition     = !var.enable_tls || (try(length(var.frontend_host) > 0, false) && try(length(var.backend_host) > 0, false))
