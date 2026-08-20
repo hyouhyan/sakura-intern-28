@@ -40,6 +40,10 @@ env:
   # デプロイ対象のイメージ名:タグ。docker-build-push.yml が push する latest タグを使う。
   # frontend も同じ値から image 名部分だけ置換して使う (application.tf 参照)。
   TF_VAR_sakuravel_backend_image_name: "intern2026-app-backend:latest"
+  # AppRunのためのやつ
+  TF_VAR_service_principal_id: ${{ secrets.TF_VAR_SERVICE_PRINCIPAL_ID }}
+  TF_VAR_frontend_host: ${{ secrets.TF_VAR_FRONTEND_HOST }}
+  TF_VAR_backend_host: ${{ secrets.TF_VAR_BACKEND_HOST }}
 
 jobs:
   terraform:
