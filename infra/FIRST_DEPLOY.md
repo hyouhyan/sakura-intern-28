@@ -1,3 +1,63 @@
+# デプロイ前手順(Webブラウザでの操作)
+
+- ドメインを用意する
+
+## APIキーの発行
+
+[さくらのクラウドホーム > APIキー](https://secure.sakura.ad.jp/cloud/#/apikeys) よりAPIキーを発行する
+
+<img width="2159" height="1228" alt="image" src="https://github.com/user-attachments/assets/06b15da3-22c4-4265-ab35-09d3a607888f" />
+
+好きな名前を入力し、以下の権限を付与する。
+
+- アクセスレベル
+  - 作成・削除
+- アクセス権
+  - オブジェクトストレージ
+  - AppRun
+  - セキュリティコントロール管理者
+
+<img width="1972" height="292" alt="image" src="https://github.com/user-attachments/assets/574df24a-1d3e-4953-8009-4812819c0fb5" />  
+memo: 図が違う。運用者じゃなくて管理者
+
+アクセストークン、アクセストークンシークレットを保存しておく
+
+<img width="917" height="761" alt="image" src="https://github.com/user-attachments/assets/6721f2db-33af-4717-8e39-d6c25fe4e74d" />
+
+## サービスプリンシパルIDの発行
+
+[さくらのクラウドホーム > サービスプリンシパル](https://secure.sakura.ad.jp/cloud/#/service-principals) よりサービスプリンシパルを作成する
+
+1. 「サービスプリンシパルの作成」をクリック  
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/21d0dfb2-ecac-430a-a51a-c390fef7113b" />
+
+2. お好きな名前を入力して作成  
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/6dce8365-f0f0-467d-bfae-828fb596e012" />
+<img width="1408" height="798" alt="image" src="https://github.com/user-attachments/assets/2fdbaa4d-9a18-495e-a49f-2100fa2e4298" />
+
+
+3. リソースIDをコピーした後、キャンセルをクリックして画面を閉じる  
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/74042509-e176-4487-90be-eb213b3c09e6" />
+
+## サービスプリンシパルに権限を付与
+
+[さくらのクラウドホーム > IAMポリシー](https://secure.sakura.ad.jp/cloud/#/iam-policy) よりIAMポリシーを設定する
+
+1. 「アクセス権の付与」をクリック
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/29be9b66-cd16-4751-bc47-bcec5114acca" />
+
+2. プリンシパルに、先程作成したサービスプリンシパルを選択  
+<img width="1990" height="1052" alt="image" src="https://github.com/user-attachments/assets/21d64e18-77a5-42d5-92e3-3da5fe73342a" />
+
+3. ロールにて「さくらのクラウド > 作成・削除」と「AppRun > AppRun専有型管理者」を選択  
+<img width="1828" height="1436" alt="image" src="https://github.com/user-attachments/assets/df886a8c-671f-4df3-b4e5-0cc79f7f603f" />  
+<img width="1728" height="1038" alt="image" src="https://github.com/user-attachments/assets/0fb57002-75ac-409e-8444-72361ab43a41" />
+
+4. 「作成」をクリック
+<img width="2940" height="1912" alt="image" src="https://github.com/user-attachments/assets/6e34e596-5c6a-4d76-a0b2-da9e74492c96" />  
+<img width="1134" height="484" alt="image" src="https://github.com/user-attachments/assets/e3bbac55-f4c5-4de4-8c81-e0d200ea7344" />
+
+
 # 初期デプロイ手順
 
 初期デプロイはローカルで実施します。state保存用バケットとコンテナレジストリを
