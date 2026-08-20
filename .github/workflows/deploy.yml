@@ -45,6 +45,8 @@ env:
   TF_VAR_registry_apprun_user_password: ${{ secrets.tf_var_registry_apprun_user_password }}
   TF_VAR_registry_apprun_user_name: ${{ vars.registry_apprun_user_name || 'apprun' }}
   TF_VAR_registry_name: ${{ vars.tf_var_registry_name }}
+  TF_VAR_zone: ${{ vars.tf_var_zone }}
+  TF_VAR_cluster_name: ${{ vars.tf_var_cluster_name }}
   TF_VAR_cluster_lets_encrypt_email: ${{ vars.tf_var_cluster_lets_encrypt_email }}
   TF_VAR_frontend_host: ${{ vars.TF_VAR_frontend_host }}
   TF_VAR_backend_host: ${{ vars.TF_VAR_backend_host }}
@@ -74,6 +76,8 @@ jobs:
             TF_VAR_service_principal_id
             TF_VAR_registry_apprun_user_password
             TF_VAR_registry_name
+            TF_VAR_zone
+            TF_VAR_cluster_name
             TF_VAR_cluster_lets_encrypt_email
             TF_VAR_frontend_host
             TF_VAR_backend_host

@@ -72,6 +72,8 @@ GitHub Repository Variablesには次を登録します。
 | Variable名 | 用途 |
 | --- | --- |
 | `enable_tls` | 本番構成に合わせて `true` または `false` を明示 |
+| `tf_var_zone` | Terraformのzone（例: `is1c`） |
+| `tf_var_cluster_name` | Terraformのcluster名 |
 | `tf_var_cluster_lets_encrypt_email` | Let's Encryptの証明書通知先メールアドレス |
 | `tf_var_registry_name` | bootstrap で作成したコンテナレジストリの表示名 |
 | `registry_apprun_user_name` | AppRun pull用ユーザー名（未設定時は `apprun`） |
