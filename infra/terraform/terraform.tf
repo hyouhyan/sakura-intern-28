@@ -10,6 +10,28 @@ terraform {
       version = "~> 3.8"
     }
   }
+
+  # Terraform state はさくらのオブジェクトストレージ (S3 互換 API) に保存する。
+  # バケットは infra/terraform-bootstrap で作成 (手動での一度きりの apply)。
+  # backend ブロックは変数 (var.*) を参照できないため、bucket は terraform init の
+  # `-backend-config` で供給する。access_key / secret_key はローカルでは backend.hcl、
+  # GitHub Actions では AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY 環境変数で供給する。
+  # さくらのオブジェクトストレージは条件付き書き込み (If-None-Match) 未対応のため
+  # use_lockfile は使用不可。排他制御は GitHub Actions の concurrency で行う
+  # (.github/workflows/deploy.yml)。
+  backend "s3" {
+    key    = "terraform.tfstate"
+    region = "jp-north-1"
+
+    endpoints = {
+      s3 = "https://s3.isk01.sakurastorage.jp"
+    }
+
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+  }
 }
 
 provider "sakura" {

@@ -9,7 +9,7 @@ output "lb_vip" {
 
 output "registry_fqdn" {
   description = "Docker imageのpush先となるコンテナレジストリのFQDN"
-  value       = sakura_container_registry.intern.fqdn
+  value       = data.sakura_container_registry.intern.fqdn
 }
 
 output "dns_records" {

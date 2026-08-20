@@ -1,0 +1,187 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/backend/**"
+      - "infra/terraform/**"
+      - "build_push_backend.sh"
+      - "build_push_frontend.sh"
+      - "deploy.sh"
+      - "deploy-recreate-runtime.sh"
+      - "terraform_apply.sh"
+      - "terraform_plan.sh"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      recreate_runtime:
+        description: "ASG/LB の置換を許可する（一時停止を伴います）"
+        required: false
+        type: boolean
+        default: false
+
+# S3互換backendにstate lockがないため、image pushからapplyまで直列化する。
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+  ENABLE_TLS: ${{ vars.enable_tls }}
+  SAKURA_ACCESS_TOKEN: ${{ secrets.sakura_access_token }}
+  SAKURA_ACCESS_TOKEN_SECRET: ${{ secrets.sakura_access_token_secret }}
+  TF_VAR_sakura_access_token: ${{ secrets.sakura_access_token }}
+  TF_VAR_sakura_access_token_secret: ${{ secrets.sakura_access_token_secret }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.tfstate_access_key_id }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.tfstate_secret_access_key }}
+  TFSTATE_BUCKET: ${{ vars.tfstate_bucket }}
+  TF_VAR_db_password: ${{ secrets.tf_var_db_password }}
+  TF_VAR_service_principal_id: ${{ vars.TF_VAR_service_principal_id }}
+  TF_VAR_registry_apprun_user_password: ${{ secrets.tf_var_registry_apprun_user_password }}
+  TF_VAR_registry_apprun_user_name: ${{ vars.registry_apprun_user_name || 'apprun' }}
+  TF_VAR_registry_name: ${{ vars.tf_var_registry_name }}
+  TF_VAR_zone: ${{ vars.tf_var_zone }}
+  TF_VAR_cluster_name: ${{ vars.tf_var_cluster_name }}
+  TF_VAR_cluster_lets_encrypt_email: ${{ vars.tf_var_cluster_lets_encrypt_email }}
+  TF_VAR_frontend_host: ${{ vars.TF_VAR_frontend_host }}
+  TF_VAR_backend_host: ${{ vars.TF_VAR_backend_host }}
+  TF_VAR_enable_tls: ${{ vars.enable_tls }}
+
+jobs:
+  deploy:
+    name: Build images and deploy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        env:
+          REGISTRY_SUBDOMAIN: ${{ secrets.registry_subdomain }}
+          REGISTRY_CI_USER_PASSWORD: ${{ secrets.registry_ci_user_password }}
+        run: |
+          required=(
+            SAKURA_ACCESS_TOKEN
+            SAKURA_ACCESS_TOKEN_SECRET
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
+            TFSTATE_BUCKET
+            TF_VAR_db_password
+            TF_VAR_service_principal_id
+            TF_VAR_registry_apprun_user_password
+            TF_VAR_registry_name
+            TF_VAR_zone
+            TF_VAR_cluster_name
+            TF_VAR_cluster_lets_encrypt_email
+            TF_VAR_frontend_host
+            TF_VAR_backend_host
+            REGISTRY_SUBDOMAIN
+            REGISTRY_CI_USER_PASSWORD
+          )
+
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::GitHub Actions の Secret/Variable ${name} が未設定です。" >&2
+              exit 1
+            fi
+          done
+
+          case "$ENABLE_TLS" in
+            true|false) ;;
+            *)
+              echo "::error::Repository Variable ENABLE_TLS は true または false にしてください。" >&2
+              exit 1
+              ;;
+          esac
+
+          subdomain="$(printf '%s' "$REGISTRY_SUBDOMAIN" | tr -d '[:space:]')"
+          subdomain="${subdomain%.sakuracr.jp}"
+          if [[ -z "$subdomain" ]]; then
+            echo "::error::REGISTRY_SUBDOMAIN が空です。" >&2
+            exit 1
+          fi
+          echo "REGISTRY_HOST=${subdomain}.sakuracr.jp" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Sakura Container Registry
+        env:
+          REGISTRY_CI_USER_PASSWORD: ${{ secrets.registry_ci_user_password }}
+        run: |
+          printf '%s' "$REGISTRY_CI_USER_PASSWORD" \
+            | docker login "$REGISTRY_HOST" --username ci --password-stdin
+
+      - name: Build and push backend image
+        run: ./build_push_backend.sh
+
+      # frontendのビルド元はこのリポジトリにないため、bootstrapで投入済みの
+      # 配布イメージを取得する。AppRunへ渡すtarget tagはbackendと同じGit SHA。
+      - name: Copy frontend image with the deployment tag
+        run: |
+          FRONTEND_SOURCE_IMAGE="${REGISTRY_HOST}/intern2026-app-frontend:latest" \
+            ./build_push_frontend.sh
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.11"
+          terraform_wrapper: false
+
+      - name: Terraform format check
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: |
+          terraform -chdir=infra/terraform init \
+            -input=false \
+            -backend-config="bucket=${TFSTATE_BUCKET}"
+
+      - name: Terraform validate
+        run: terraform -chdir=infra/terraform validate
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          ./terraform_plan.sh -input=false -out=tfplan
+          terraform -chdir=infra/terraform show -json tfplan > "$RUNNER_TEMP/tfplan.json"
+
+          if jq -e '
+            [.resource_changes[]?
+              | select(
+                  .address == "sakura_apprun_dedicated_auto_scaling_group.main"
+                  or .address == "sakura_apprun_dedicated_lb.main"
+                )
+              | .change.actions]
+            | any(index("create") != null and index("delete") != null)
+          ' "$RUNNER_TEMP/tfplan.json" >/dev/null; then
+            echo "recreate_runtime=true" >> "$GITHUB_OUTPUT"
+            echo "ASG/LBの置換を検出しました。"
+          else
+            echo "recreate_runtime=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require explicit approval for runtime recreation
+        if: steps.plan.outputs.recreate_runtime == 'true' && inputs.recreate_runtime != true
+        run: |
+          echo "::error::ASG/LBの置換には一時停止が伴います。ActionsのRun workflowから recreate_runtime を有効にして再実行してください。" >&2
+          exit 1
+
+      - name: Deploy new application versions
+        if: steps.plan.outputs.recreate_runtime != 'true'
+        run: ./deploy.sh -input=false tfplan
+
+      - name: Recreate runtime and deploy
+        if: steps.plan.outputs.recreate_runtime == 'true' && inputs.recreate_runtime == true
+        run: ./deploy-recreate-runtime.sh -input=false -auto-approve
+
+      - name: Show deployed versions
+        run: |
+          terraform -chdir=infra/terraform output backend_version
+          terraform -chdir=infra/terraform output frontend_version

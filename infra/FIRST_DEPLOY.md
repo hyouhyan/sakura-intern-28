@@ -65,7 +65,10 @@ cp infra/terraform/environment.auto.tfvars.example \
 ## 3. Terraformを初期化する
 
 ```sh
-terraform -chdir=infra/terraform init
+export TFSTATE_BUCKET="intern26-group-d-tfstate-131313"
+terraform -chdir=infra/terraform init \
+  -backend-config=backend.hcl \
+  -backend-config="bucket=${TFSTATE_BUCKET}"
 terraform -chdir=infra/terraform fmt -check
 terraform -chdir=infra/terraform validate
 ```
