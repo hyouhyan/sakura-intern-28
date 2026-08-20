@@ -10,3 +10,8 @@ registry_ci_user_password = ""
 # コンテナレジストリ: AppRun pull用アカウントのパスワード
 # infra/terraform 側の secret.auto.tfvars と同じ値を使う
 registry_apprun_user_password = ""
+
+# 配布元コンテナレジストリ (intern22.sakuracr.jp) のログイン情報
+# 初期イメージ (frontend/backend) の pull に使用する
+source_registry_username = ""
+source_registry_password = ""

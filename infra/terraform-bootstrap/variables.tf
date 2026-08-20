@@ -75,3 +75,34 @@ variable "registry_apprun_user_password" {
   type        = string
   sensitive   = true
 }
+
+########################################
+# 初期イメージ投入 (配布元レジストリからのシード)
+########################################
+
+variable "source_registry_host" {
+  description = "配布元コンテナレジストリのホスト名。ここから frontend/backend の初期イメージを取得する。"
+  type        = string
+  default     = "intern22.sakuracr.jp"
+}
+
+variable "source_registry_username" {
+  description = "配布元コンテナレジストリのログインユーザー名。"
+  type        = string
+  sensitive   = true
+}
+
+variable "source_registry_password" {
+  description = "配布元コンテナレジストリのログインパスワード。"
+  type        = string
+  sensitive   = true
+}
+
+variable "seed_images" {
+  description = <<-EOT
+    bootstrap時に配布元レジストリ (source_registry_host) から取得し、
+    自分たちのレジストリへ push しておくイメージ名の一覧 (タグは常に latest)。
+  EOT
+  type        = list(string)
+  default     = ["intern2026-app-frontend", "intern2026-app-backend"]
+}
