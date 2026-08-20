@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 registry_host="${REGISTRY_HOST}"
 image_tag="${IMAGE_TAG:-${GITHUB_SHA:-$(git -C "${script_dir}" rev-parse HEAD)}}"
-source_image="intern22.sakuracr.jp/intern2026-app-frontend:latest"
+source_image="${FRONTEND_SOURCE_IMAGE:-intern22.sakuracr.jp/intern2026-app-frontend:latest}"
 target_image="${registry_host}/intern2026-app-frontend:${image_tag}"
 
 echo "==> Frontend imageをpullします"

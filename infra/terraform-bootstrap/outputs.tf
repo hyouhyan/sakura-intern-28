@@ -4,7 +4,7 @@
 # に登録し、infra/terraform 側の S3 backend 認証に使用する。
 
 output "bucket_name" {
-  description = "Terraform state 保存用バケット名。infra/terraform/terraform.tf の backend.bucket と一致させる。"
+  description = "Terraform state 保存用バケット名。terraform init 時の TFSTATE_BUCKET に設定する。"
   value       = sakura_object_storage_bucket.tfstate.name
 }
 

@@ -41,12 +41,6 @@ variable "server_private_net_cidr" {
   default     = "192.168.1.40/24"
 }
 
-variable "server_password" {
-  description = "サーバーの初期パスワード (SSH 公開鍵認証を使用する場合でも必要)"
-  type        = string
-  sensitive   = true
-}
-
 variable "server_ssh_public_key_path" {
   description = "サーバーへの SSH 公開鍵認証で使用する公開鍵ファイルのパス"
   type        = string
@@ -71,7 +65,6 @@ variable "cluster_name" {
 variable "cluster_lets_encrypt_email" {
   description = "クラスタの Let's Encrypt 証明書を取得する際に使用するメールアドレス"
   type        = string
-  default     = "hyouhyan@hyouhyan.com"
 }
 
 variable "service_principal_id" {
@@ -309,7 +302,6 @@ variable "frontend_replicas" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名。infra/terraform-bootstrap で作成したレジストリを data source で参照する際のキー。"
   type        = string
-  default     = "intern26-group-d"
 }
 
 variable "registry_apprun_user_password" {

@@ -9,21 +9,25 @@
 zoneとcluster名は `terraform/environment.auto.tfvars` に保存します。このファイルは
 git管理外です。新しい環境では `environment.auto.tfvars.example` をコピーしてください。
 
-`terraform init` に必要な state 保存用オブジェクトストレージの認証情報 (`access_key` /
-`secret_key`) も同様にファイルで供給します (`backend` ブロックは変数を参照できないため、
-tfvars ではなく `-backend-config` 用のファイルに分離しています)：
+`terraform init` に必要な state 保存用バケット名は `TFSTATE_BUCKET` 環境変数から
+`-backend-config` へ渡します。認証情報 (`access_key` / `secret_key`) は
+`-backend-config` 用のファイルで供給します：
 
 ```
 cp backend.hcl.example backend.hcl
 # access_key / secret_key を編集 (値は bootstrap の出力、下記参照)
-terraform init -backend-config=backend.hcl
+export TFSTATE_BUCKET="intern26-group-d-tfstate-131313"
+terraform init \
+  -backend-config=backend.hcl \
+  -backend-config="bucket=${TFSTATE_BUCKET}"
 ```
 
 ## Terraform apply について
 
 `infra/terraform` の `terraform apply` は GitHub Actions
-(`.github/workflows/terraform-apply.yml`) からのみ実行します。
-`main` へのマージ・push を契機に `init` → `validate` → `plan` → `apply` が実行されます。
+(`.github/workflows/deploy.yml`) からのみ実行します。
+`main` へのマージ・push を契機に、backend/frontendへ同じGit SHAのタグを付けて
+pushした後、`init` → `validate` → `plan` → `apply` が順番に実行されます。
 ローカルから `terraform apply` を実行しないでください
 (`terraform plan` までの確認はローカルで行って構いません)。
 
@@ -48,26 +52,37 @@ terraform output -raw secret_key
 ```
 
 出力された `access_key` / `secret_key` を GitHub Secrets の
-`TFSTATE_ACCESS_KEY_ID` / `TFSTATE_SECRET_ACCESS_KEY` に登録してください。
+`tfstate_access_key_id` / `tfstate_secret_access_key` に登録してください。
 
 ### GitHub Secrets 一覧
 
 | Secret名 | 用途 |
 | --- | --- |
-| `SAKURA_ACCESS_TOKEN` | さくらのクラウド API トークン |
-| `SAKURA_ACCESS_TOKEN_SECRET` | さくらのクラウド API トークンシークレット |
-| `TFSTATE_ACCESS_KEY_ID` | state 保存用オブジェクトストレージのアクセスキー (bootstrap の出力) |
-| `TFSTATE_SECRET_ACCESS_KEY` | state 保存用オブジェクトストレージのシークレットキー (bootstrap の出力) |
-| `TF_VAR_DB_PASSWORD` | データベースパスワード |
-| `TF_VAR_SERVER_PASSWORD` | サーバー初期パスワード |
-| `REGISTRY_SUBDOMAIN` | さくらのコンテナレジストリのサブドメイン (`<REGISTRY_SUBDOMAIN>.sakuracr.jp`)。`.github/workflows/docker-build-push.yml` で使用 |
-| `REGISTRY_CI_USER_PASSWORD` | コンテナレジストリの CI 用ユーザー (`ci`) のパスワード |
+| `sakura_access_token` | さくらのクラウド API トークン |
+| `sakura_access_token_secret` | さくらのクラウド API トークンシークレット |
+| `tfstate_access_key_id` | state 保存用オブジェクトストレージのアクセスキー (bootstrap の出力) |
+| `tfstate_secret_access_key` | state 保存用オブジェクトストレージのシークレットキー (bootstrap の出力) |
+| `tf_var_db_password` | データベースパスワード |
+| `tf_var_registry_apprun_user_password` | AppRun pull用ユーザーのパスワード |
+| `registry_subdomain` | さくらのコンテナレジストリのサブドメイン (`<registry_subdomain>.sakuracr.jp`) |
+| `registry_ci_user_password` | コンテナレジストリの CI 用ユーザー (`ci`) のパスワード |
 
-> **注意**: 上記の GitHub Actions は現状 `terraform plan`/`apply` をそのまま実行するだけです。
-> 下記「デプロイ（バージョンの作り直し）」にあるとおり、AppRun のバージョン更新
-> (イメージや環境変数の変更を反映するデプロイ) には無効化 → 再作成 → 有効化の3段階 apply
-> (`redeploy.sh`) が必要で、素の `terraform apply` 1回では反映されません。
-> CI からのデプロイ自動化にはワークフロー側の追従が別途必要です。
+GitHub Repository Variablesには次を登録します。
+
+| Variable名 | 用途 |
+| --- | --- |
+| `enable_tls` | 本番構成に合わせて `true` または `false` を明示 |
+| `tf_var_cluster_lets_encrypt_email` | Let's Encryptの証明書通知先メールアドレス |
+| `tf_var_registry_name` | bootstrap で作成したコンテナレジストリの表示名 |
+| `registry_apprun_user_name` | AppRun pull用ユーザー名（未設定時は `apprun`） |
+| `tfstate_bucket` | bootstrap で作成した Terraform state 保存用バケット名 |
+| `TF_VAR_service_principal_id` | AppRunクラスタのサービスプリンシパルID |
+| `TF_VAR_frontend_host` | frontendを公開するFQDN |
+| `TF_VAR_backend_host` | backendを公開するFQDN |
+
+通常のversion更新は無停止で自動デプロイされます。planにASG/LBの置換が含まれる場合、
+push起点の実行は一時停止を避けるため失敗させます。内容を確認後、Actionsの
+`Run workflow` から `recreate_runtime` を有効にして手動実行してください。
 
 ## 構成
 
