@@ -82,6 +82,15 @@ GitHub Repository Variablesには次を登録します。
 | `TF_VAR_frontend_host` | frontendを公開するFQDN |
 | `TF_VAR_backend_host` | backendを公開するFQDN |
 
+これらはリポジトリルートの同期スクリプトで、ローカル設定からまとめて登録できます。
+secretの値は画面へ出力しません。未設定またはプレースホルダーのsecretは既存値を保つためスキップします。
+事前確認のみ行う場合は `--dry-run` を指定します。
+
+```sh
+./sync_github_config.sh --dry-run
+./sync_github_config.sh
+```
+
 通常のversion更新は無停止で自動デプロイされます。planにASG/LBの置換が含まれる場合、
 push起点の実行は一時停止を避けるため失敗させます。内容を確認後、Actionsの
 `Run workflow` から `recreate_runtime` を有効にして手動実行してください。
