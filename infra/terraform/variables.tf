@@ -19,7 +19,10 @@ variable "sakura_access_token_secret" {
 variable "zone" {
   description = "リソースを作成するゾーン。"
   type        = string
-  default     = "is1a" # 石狩第1ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択
+  # 石狩第3ゾーン。tk1a / tk1b / is1a / is1b / is1c から選択。
+  # is1a はゾーン内のスイッチ数上限に引っかかり、この構成が必要とする
+  # 2 つ (ルータ付属 + プライベート) を確保できなかったため is1c にしている。
+  default = "is1c"
 }
 
 ########################################
@@ -57,7 +60,7 @@ variable "server_ssh_public_key_path" {
 variable "cluster_name" {
   description = "作成するクラスタの名前 (20文字以内)"
   type        = string
-  default     = "sakuravel-is1a"
+  default     = "sakuravel-is1c"
 
   validation {
     condition     = length(var.cluster_name) <= 20
@@ -196,6 +199,7 @@ variable "frontend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "backend_host" {
@@ -208,6 +212,7 @@ variable "backend_host" {
   EOT
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "enable_tls" {
@@ -227,7 +232,6 @@ variable "enable_tls" {
         (LB のポートはクラスタ作成時にしか設定できず、後から追加できない)
   EOT
   type        = bool
-  default     = false
 
   validation {
     condition     = !var.enable_tls || (try(length(var.frontend_host) > 0, false) && try(length(var.backend_host) > 0, false))
@@ -241,38 +245,6 @@ variable "enable_tls" {
 }
 
 ########################################
-# アプリケーションの有効バージョン
-########################################
-#
-# provider の application リソースは Create 時に active_version を送らず、
-# API が返す null で state を上書きする。そのため application を新規作成する
-# apply でこの値を指定すると "Provider produced inconsistent result after
-# apply" で失敗する。有効化は Update 経由でしか行えない。
-#
-# したがって以下の場合は 2 段階で apply する (redeploy.sh がやってくれる):
-#   - application を新規作成するとき
-#   - version を作り直すとき (アクティブな version は削除できない)
-#
-#     1 回目: terraform apply -var-file=deactivate.tfvars
-#     2 回目: terraform apply -var 'backend_active_version=<terraform output backend_version の値>' ...
-#
-# -var では null を渡せない (文字列 "null" になり number に変換できず失敗する) ため、
-# 無効化には deactivate.tfvars を使う。
-# 構成を変えない通常時は default のままで apply すればよい。
-
-variable "backend_active_version" {
-  description = "有効化する backend アプリのバージョン番号"
-  type        = number
-  default     = 1
-}
-
-variable "frontend_active_version" {
-  description = "有効化する frontend アプリのバージョン番号"
-  type        = number
-  default     = 1
-}
-
-########################################
 # ワーカーノード数
 ########################################
 
@@ -283,9 +255,50 @@ variable "asg_min_nodes" {
 }
 
 variable "asg_max_nodes" {
-  description = "オートスケーリンググループの最大ノード数。AppRun はコンテナ 1 個につきワーカーノード 1 台を割り当てるため、起動するコンテナの合計数以上にする"
+  description = <<-EOT
+    オートスケーリンググループの最大ノード数。
+
+    NOTE: 「コンテナ 1 個につきワーカーノード 1 台」ではない。
+    ノードの空きリソースに収まる限り、AppRun は 1 台のノードに複数の
+    コンテナを載せる。実測では backend 3 + frontend 1 = 4 コンテナ
+    (いずれも cpu=1000 / memory=512) が 3 ノードに収まった。
+    したがってこの値はノード数の上限であって、コンテナ数の上限ではない。
+
+    NOTE: min_nodes / max_nodes は RequiresReplace で、provider は ASG の
+    Update を実装していない。この値を変えるだけで ASG が作り直しになり、
+    ASG を参照している LB も巻き添えで再作成される
+    (実測で 20 分前後のダウン + Let's Encrypt 証明書の再発行)。
+  EOT
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.asg_max_nodes >= var.asg_min_nodes
+    error_message = "asg_max_nodes は asg_min_nodes 以上にしてください。"
+  }
+}
+
+variable "backend_replicas" {
+  description = <<-EOT
+    起動する backend コンテナの数。LB はこの台数に振り分ける。
+
+    ノード数との関係は asg_max_nodes の説明を参照。
+    ノードの空きリソース次第で 1 ノードに複数コンテナが載るため、
+    レプリカ数と同じだけのノードが必要になるとは限らない。
+  EOT
   type        = number
   default     = 3
+
+  validation {
+    condition     = var.backend_replicas >= 1
+    error_message = "backend_replicas は 1 以上にしてください。"
+  }
+}
+
+variable "frontend_replicas" {
+  description = "起動する frontend コンテナの数。"
+  type        = number
+  default     = 1
 }
 
 ########################################
@@ -296,6 +309,25 @@ variable "asg_max_nodes" {
 variable "registry_name" {
   description = "コンテナレジストリの表示名。infra/terraform-bootstrap で作成したレジストリを data source で参照する際のキー。"
   type        = string
+  default     = "intern131313"
+}
+
+variable "registry_subdomain_label" {
+  description = <<-EOT
+    コンテナレジストリのホスト名になるラベル (<label>.sakuracr.jp)。
+
+    sakuracr.jp 全体で一意なので、他アカウントで使われている名前は作成できず
+    "registry_name: すでに利用されています" で 400 になる。
+    既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
+  EOT
+  type        = string
+  default     = "intern131313"
+}
+
+variable "registry_ci_user_password" {
+  description = "GitHub Actions push用アカウントのパスワード"
+  type        = string
+  sensitive   = true
   default     = "intern26-group-d"
 }
 

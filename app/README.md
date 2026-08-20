@@ -54,7 +54,7 @@ docker compose up -d
 
 `stop` / `restart` / `logs` はサービス名（`frontend` / `api` / `db`）を渡すと個別に操作できます。
 
-`down -v` は DB のボリュームごと削除するため、次回起動時に `backend/migrations/` が再実行されてスキーマが作り直されます。投入したダミーデータも消えるので、必要なら再度シードを流してください。
+`down -v` は DB のボリュームごと削除するため、次回の API 起動時に `backend/migrations/` が実行されてスキーマが作り直されます。投入したダミーデータも消えるので、必要なら再度シードを流してください。
 
 個別に起動したい場合は以下の手順です。
 
@@ -68,7 +68,7 @@ docker compose up -d
 - API: `http://localhost:8080`
 - MariaDB: `localhost:3306`（DB: `sakuravel` / user: `sakuravel` / password: `password`）
 
-初回起動時のみ `migrations/*.sql` が自動実行され、スキーマが作成されます。
+API 起動時に未適用の `migrations/*.sql` が自動実行されます。
 
 ### 2. ダミーデータを投入（任意）
 

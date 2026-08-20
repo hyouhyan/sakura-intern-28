@@ -7,11 +7,17 @@ output "lb_vip" {
   value       = local.lb_vip
 }
 
+output "registry_fqdn" {
+  description = "Docker imageのpush先となるコンテナレジストリのFQDN"
+  value       = sakura_container_registry.intern.fqdn
+}
+
 output "dns_records" {
   description = <<-EOT
     手動で登録する必要がある DNS レコード。
     Let's Encrypt の証明書取得より前に登録しておくこと。
   EOT
+  sensitive   = true
   value = var.enable_tls ? {
     (var.frontend_host) = local.lb_vip
     (var.backend_host)  = local.lb_vip
@@ -20,12 +26,24 @@ output "dns_records" {
 
 output "frontend_url" {
   description = "フロントエンドの URL"
+  sensitive   = true
   value       = local.frontend_url
 }
 
 output "backend_url" {
   description = "バックエンド API の URL"
+  sensitive   = true
   value       = local.backend_url
+}
+
+output "backend_application_id" {
+  description = "デプロイ後の version 有効化に使う backend application ID"
+  value       = sakura_apprun_dedicated_application.backend.id
+}
+
+output "frontend_application_id" {
+  description = "デプロイ後の version 有効化に使う frontend application ID"
+  value       = sakura_apprun_dedicated_application.frontend.id
 }
 
 output "internet_cidr" {
@@ -44,12 +62,12 @@ output "ip_allocation" {
 }
 
 output "backend_version" {
-  description = "作成された backend の version 番号。backend_active_version にこの値を設定して再 apply する"
+  description = "作成された backend の version 番号"
   value       = sakura_apprun_dedicated_version.backend.version
 }
 
 output "frontend_version" {
-  description = "作成された frontend の version 番号。frontend_active_version にこの値を設定して再 apply する"
+  description = "作成された frontend の version 番号"
   value       = sakura_apprun_dedicated_version.frontend.version
 }
 
