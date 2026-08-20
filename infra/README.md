@@ -9,6 +9,11 @@
 zoneとcluster名は `terraform/environment.auto.tfvars` に保存します。このファイルは
 git管理外です。新しい環境では `environment.auto.tfvars.example` をコピーしてください。
 
+bootstrapとapplication Terraformで共通する`registry_name`と
+`registry_apprun_user_password`は、`infra/common.tfvars`に保存します。
+新しい環境では`common.tfvars.example`をコピーしてください。ローカルでplan/applyする
+場合は`-var-file=../common.tfvars`を指定します（ルートの実行スクリプトでは自動指定されます）。
+
 `terraform init` に必要な state 保存用バケット名は `TFSTATE_BUCKET` 環境変数から
 `-backend-config` へ渡します。認証情報 (`access_key` / `secret_key`) は
 `-backend-config` 用のファイルで供給します：
@@ -47,7 +52,7 @@ cd infra/terraform-bootstrap
 export SAKURA_ACCESS_TOKEN=...
 export SAKURA_ACCESS_TOKEN_SECRET=...
 terraform init
-terraform apply
+terraform apply -var-file=../common.tfvars
 terraform output -raw access_key
 terraform output -raw secret_key
 ```

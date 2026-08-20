@@ -24,8 +24,3 @@ output "registry_fqdn" {
   description = "コンテナレジストリの FQDN。infra/terraform 側の data source から参照される。"
   value       = sakura_container_registry.intern.fqdn
 }
-
-output "registry_subdomain_label" {
-  description = "コンテナレジストリのサブドメインラベル。GitHub Secrets の REGISTRY_SUBDOMAIN と一致させる。"
-  value       = sakura_container_registry.intern.subdomain_label
-}

@@ -32,9 +32,6 @@ permissions:
 
 env:
   IMAGE_TAG: ${{ github.sha }}
-  ENABLE_TLS: ${{ vars.enable_tls }}
-  SAKURA_ACCESS_TOKEN: ${{ secrets.sakura_access_token }}
-  SAKURA_ACCESS_TOKEN_SECRET: ${{ secrets.sakura_access_token_secret }}
   TF_VAR_sakura_access_token: ${{ secrets.sakura_access_token }}
   TF_VAR_sakura_access_token_secret: ${{ secrets.sakura_access_token_secret }}
   AWS_ACCESS_KEY_ID: ${{ secrets.tfstate_access_key_id }}
@@ -67,8 +64,8 @@ jobs:
           REGISTRY_CI_USER_PASSWORD: ${{ secrets.registry_ci_user_password }}
         run: |
           required=(
-            SAKURA_ACCESS_TOKEN
-            SAKURA_ACCESS_TOKEN_SECRET
+            TF_VAR_sakura_access_token
+            TF_VAR_sakura_access_token_secret
             AWS_ACCESS_KEY_ID
             AWS_SECRET_ACCESS_KEY
             TFSTATE_BUCKET
@@ -92,7 +89,7 @@ jobs:
             fi
           done
 
-          case "$ENABLE_TLS" in
+          case "$TF_VAR_enable_tls" in
             true|false) ;;
             *)
               echo "::error::Repository Variable ENABLE_TLS は true または false にしてください。" >&2

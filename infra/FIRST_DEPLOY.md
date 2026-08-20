@@ -108,8 +108,18 @@ bootstrapは次のリソースをローカルで一度だけ作成します。
 - コンテナレジストリと`ci`・`apprun`ユーザー
 - 配布元レジストリから取得したfrontend/backendの初期イメージ
 
+bootstrapとアプリケーションTerraformで共有する設定を作成します。
+
 ```sh
-cp infra/terraform-bootstrap/sercet.auto.tfvars.example \
+cp infra/common.tfvars.example infra/common.tfvars
+```
+
+`infra/common.tfvars`に、コンテナレジストリの表示名兼サブドメインとAppRun pull用
+アカウントのパスワードを設定します。`registry_name`は
+`<registry_name>.sakuracr.jp`として使われるため、サービス全体で一意にします。
+
+```sh
+cp infra/terraform-bootstrap/secret.auto.tfvars.example \
   infra/terraform-bootstrap/secret.auto.tfvars
 ```
 
@@ -117,25 +127,21 @@ cp infra/terraform-bootstrap/sercet.auto.tfvars.example \
 
 | 変数 | 設定内容 |
 | --- | --- |
-| `sakura_access_token` | `.env`と同じさくらのクラウドAPIトークン |
-| `sakura_access_token_secret` | `.env`と同じAPIトークンシークレット |
 | `registry_ci_user_password` | GitHub Actionsからpushする`ci`ユーザーのパスワード |
-| `registry_apprun_user_password` | AppRunがpullする`apprun`ユーザーのパスワード |
-| `source_registry_username` | 配布元レジストリのユーザー名 |
-| `source_registry_password` | 配布元レジストリのパスワード |
+| `source_registry_username` | frontend imageの配布元レジストリのユーザー名 |
+| `source_registry_password` | frontend imageの配布元レジストリのパスワード |
 | `bucket_name` | state保存用の一意なバケット名 |
-| `registry_name` | コンテナレジストリの表示名 |
-| `registry_subdomain_label` | `<値>.sakuracr.jp`となる一意なサブドメイン |
 
-パスワードは1Passwordの該当項目を使用してください。`bucket_name`と
-`registry_subdomain_label`はサービス全体で重複しない値にします。
+パスワードは1Passwordの該当項目を使用してください。`bucket_name`は
+オブジェクトストレージ全体で重複しない値にします。
 
 ## 4. bootstrapを実行する
 
 ```sh
+set -a; source .env; set +a
 terraform -chdir=infra/terraform-bootstrap init
-terraform -chdir=infra/terraform-bootstrap plan
-terraform -chdir=infra/terraform-bootstrap apply
+terraform -chdir=infra/terraform-bootstrap plan -var-file=../common.tfvars
+terraform -chdir=infra/terraform-bootstrap apply -var-file=../common.tfvars
 ```
 
 bootstrapのstateはローカル管理です。削除すると作成済みリソースをTerraformで管理
@@ -165,7 +171,6 @@ cp infra/terraform/secret.auto.tfvars.example \
 | `service_principal_id` | AppRun操作権限を持つサービスプリンシパルID |
 | `frontend_host` | frontend公開用FQDN |
 | `backend_host` | API公開用FQDN。frontendとは別のFQDNにする |
-| `registry_apprun_user_password` | bootstrapに設定した同名変数と同じ値 |
 
 環境固有の値を作成します。
 
@@ -181,7 +186,6 @@ cp infra/terraform/environment.auto.tfvars.example \
 | `zone` | 作成先zone。デフォルトは石狩第1の`is1a` |
 | `cluster_name` | AppRunクラスタ名 |
 | `cluster_lets_encrypt_email` | Let's Encryptの通知先メールアドレス |
-| `registry_name` | bootstrapの`registry_name`と同じ値 |
 | `enable_tls` | 初回構築時は`false` |
 
 `zone`と`cluster_name`を構築後に変更すると、DBを含む主要リソースが再作成される

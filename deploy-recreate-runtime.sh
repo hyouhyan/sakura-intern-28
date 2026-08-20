@@ -7,6 +7,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+export ENABLE_TLS="${ENABLE_TLS:-${TF_VAR_enable_tls:-}}"
+
 case "${1:-}" in
   -h|--help)
     cat <<'EOF'

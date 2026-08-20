@@ -34,8 +34,9 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 main_secrets="$root_dir/infra/terraform/secret.auto.tfvars"
 environment_vars="$root_dir/infra/terraform/environment.auto.tfvars"
 bootstrap_secrets="$root_dir/infra/terraform-bootstrap/secret.auto.tfvars"
+common_vars="$root_dir/infra/common.tfvars"
 
-for file in "$root_dir/.env" "$main_secrets" "$environment_vars" "$bootstrap_secrets"; do
+for file in "$root_dir/.env" "$common_vars" "$main_secrets" "$environment_vars" "$bootstrap_secrets"; do
   if [[ ! -f "$file" ]]; then
     echo "Required local config is missing: ${file#"$root_dir/"}" >&2
     exit 1
@@ -123,13 +124,13 @@ db_password="$(read_tfvar db_password "$main_secrets")"
 service_principal_id="$(read_tfvar service_principal_id "$main_secrets")"
 frontend_host="$(read_tfvar frontend_host "$main_secrets")"
 backend_host="$(read_tfvar backend_host "$main_secrets")"
-registry_apprun_password="$(read_tfvar registry_apprun_user_password "$main_secrets")"
+registry_apprun_password="$(read_tfvar registry_apprun_user_password "$common_vars")"
 registry_ci_password="$(read_tfvar registry_ci_user_password "$bootstrap_secrets")"
 
 zone="$(read_tfvar zone "$environment_vars")"
 cluster_name="$(read_tfvar cluster_name "$environment_vars")"
 cluster_email="$(read_tfvar cluster_lets_encrypt_email "$environment_vars")"
-registry_name="$(read_tfvar registry_name "$environment_vars")"
+registry_name="$(read_tfvar registry_name "$common_vars")"
 enable_tls="$(read_tfvar enable_tls "$environment_vars")"
 
 if [[ "$enable_tls" != true && "$enable_tls" != false ]]; then
@@ -140,7 +141,7 @@ fi
 tfstate_access_key="$(terraform -chdir="$root_dir/infra/terraform-bootstrap" output -raw access_key)"
 tfstate_secret_key="$(terraform -chdir="$root_dir/infra/terraform-bootstrap" output -raw secret_key)"
 tfstate_bucket="$(terraform -chdir="$root_dir/infra/terraform-bootstrap" output -raw bucket_name)"
-registry_subdomain="$(terraform -chdir="$root_dir/infra/terraform-bootstrap" output -raw registry_subdomain_label)"
+registry_subdomain="$registry_name"
 
 echo "Repository: $repo"
 echo "Mode: $($dry_run && echo dry-run || echo update)"

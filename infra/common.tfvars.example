@@ -1,0 +1,9 @@
+# bootstrap と application Terraform で共通して使用する設定値。
+# このファイルを common.tfvars にコピーして利用する。
+
+# コンテナレジストリの表示名兼サブドメイン
+# <registry_name>.sakuracr.jp となるため、sakuracr.jp全体で一意にする
+registry_name = "<your_registry_name>"
+
+# AppRun pull用アカウントのパスワード
+registry_apprun_user_password = "<your_registry_apprun_user_password>"

@@ -32,6 +32,11 @@ else
   unset ENABLE_TLS
 fi
 
+# CIではTerraform入力用のTF_VAR_*を正とし、シェルが必要とする名前へ変換する。
+export SAKURA_ACCESS_TOKEN="${SAKURA_ACCESS_TOKEN:-${TF_VAR_sakura_access_token:-}}"
+export SAKURA_ACCESS_TOKEN_SECRET="${SAKURA_ACCESS_TOKEN_SECRET:-${TF_VAR_sakura_access_token_secret:-}}"
+export ENABLE_TLS="${ENABLE_TLS:-${TF_VAR_enable_tls:-}}"
+
 if [[ -z "${SAKURA_ACCESS_TOKEN:-}" || -z "${SAKURA_ACCESS_TOKEN_SECRET:-}" ]]; then
   echo "エラー: SAKURA_ACCESS_TOKEN と SAKURA_ACCESS_TOKEN_SECRET を設定してください" >&2
   exit 1

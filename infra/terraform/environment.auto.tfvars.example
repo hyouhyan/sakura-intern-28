@@ -3,5 +3,4 @@
 zone                       = "is1a"
 cluster_name               = "sakuravel-is1a"
 cluster_lets_encrypt_email = "admin@example.com"
-registry_name              = "<your_registry_name>"
 enable_tls                 = true
