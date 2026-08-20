@@ -86,7 +86,7 @@ export TF_VAR_sakura_access_token="${SAKURA_ACCESS_TOKEN}"
 export TF_VAR_sakura_access_token_secret="${SAKURA_ACCESS_TOKEN_SECRET}"
 export TF_VAR_enable_tls=true
 export TF_VAR_sakuravel_backend_image_name="intern2026-app-backend:${IMAGE_TAG}"
-terraform -chdir=infra/terraform plan
+terraform -chdir=infra/terraform plan -var-file=../common.tfvars
 ```
 
 通常のイメージ更新では、backend/frontendのversionがそれぞれ

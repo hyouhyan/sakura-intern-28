@@ -27,8 +27,10 @@ case "${1:-}" in
     ;;
 esac
 
-: "${SAKURA_ACCESS_TOKEN:?SAKURA_ACCESS_TOKEN を設定してください}"
-: "${SAKURA_ACCESS_TOKEN_SECRET:?SAKURA_ACCESS_TOKEN_SECRET を設定してください}"
+SAKURA_ACCESS_TOKEN="${SAKURA_ACCESS_TOKEN:-${TF_VAR_sakura_access_token:-}}"
+SAKURA_ACCESS_TOKEN_SECRET="${SAKURA_ACCESS_TOKEN_SECRET:-${TF_VAR_sakura_access_token_secret:-}}"
+: "${SAKURA_ACCESS_TOKEN:?SAKURA_ACCESS_TOKEN または TF_VAR_sakura_access_token を設定してください}"
+: "${SAKURA_ACCESS_TOKEN_SECRET:?SAKURA_ACCESS_TOKEN_SECRET または TF_VAR_sakura_access_token_secret を設定してください}"
 
 api_root="${APPRUN_DEDICATED_API_URL:-https://secure.sakura.ad.jp/cloud/api/apprun-dedicated/1.0}"
 api_root="${api_root%/}"

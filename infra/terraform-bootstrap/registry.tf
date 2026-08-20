@@ -20,7 +20,7 @@ resource "sakura_container_registry" "intern" {
   # "registry_name: すでに利用されています" で作成に失敗する。
   # 環境ごとに別のレジストリを使えるよう変数にしている。
   name            = var.registry_name
-  subdomain_label = var.registry_subdomain_label
+  subdomain_label = var.registry_name
 
   description = "AppRun用のコンテナレジストリ"
 

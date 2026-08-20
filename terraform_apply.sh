@@ -28,6 +28,11 @@ else
   unset ENABLE_TLS
 fi
 
+# CIではTerraform入力用のTF_VAR_*を正とし、シェルが必要とする名前へ変換する。
+export SAKURA_ACCESS_TOKEN="${SAKURA_ACCESS_TOKEN:-${TF_VAR_sakura_access_token:-}}"
+export SAKURA_ACCESS_TOKEN_SECRET="${SAKURA_ACCESS_TOKEN_SECRET:-${TF_VAR_sakura_access_token_secret:-}}"
+export ENABLE_TLS="${ENABLE_TLS:-${TF_VAR_enable_tls:-}}"
+
 case "${ENABLE_TLS:-}" in
   true|false) ;;
   *)
@@ -45,4 +50,11 @@ export TF_VAR_sakuravel_backend_image_name="intern2026-app-backend:${image_tag}"
 [[ -z "${SAKURA_ACCESS_TOKEN_SECRET:-}" ]] || export TF_VAR_sakura_access_token_secret="${SAKURA_ACCESS_TOKEN_SECRET}"
 export TF_VAR_enable_tls="${ENABLE_TLS}"
 
-terraform -chdir="${script_dir}/infra/terraform" apply "$@"
+common_var_args=()
+if [[ -f "${script_dir}/infra/common.tfvars" ]]; then
+  common_var_args=(-var-file=../common.tfvars)
+fi
+
+terraform -chdir="${script_dir}/infra/terraform" apply \
+  "${common_var_args[@]}" \
+  "$@"

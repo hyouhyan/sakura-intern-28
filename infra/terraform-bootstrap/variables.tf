@@ -40,17 +40,12 @@ variable "bucket_name" {
 # 手動一度きりの apply で docker login を経由しないため、ここに置く。
 
 variable "registry_name" {
-  description = "コンテナレジストリの表示名"
-  type        = string
-}
-
-variable "registry_subdomain_label" {
   description = <<-EOT
-    コンテナレジストリのホスト名になるラベル (<label>.sakuracr.jp)。
+    コンテナレジストリの表示名兼、ホスト名になるラベル (<registry_name>.sakuracr.jp)。
 
     sakuracr.jp 全体で一意なので、他アカウントで使われている名前は作成できず
     "registry_name: すでに利用されています" で 400 になる。
-    既存のレジストリを使う場合は、そのラベルを指定して terraform import すること。
+    既存のレジストリを使う場合は、その名前を指定して terraform import すること。
   EOT
   type        = string
 }
